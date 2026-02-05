@@ -13,7 +13,7 @@ from utils import setup_file_logging, get_logger
 
 # Metadata
 __version__ = '0.9.0'
-__status__ = 'beta'
+__status__ = 'alpha'
 __date__ = '2026-01-09'
 __author__ = 'Stefano Mancuso'
 

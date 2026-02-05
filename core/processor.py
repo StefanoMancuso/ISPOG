@@ -11,8 +11,8 @@ from typing import Optional
 
 from utils.logger import get_logger
 from utils.io import load_musicxml
-from core.entities import Fretboard
-from core.musicxml import (
+from .entities import Fretboard
+from .musicxml import (
     parse_measures,
     merge_bars_to_score,
     analyze_score_playability,
@@ -150,7 +150,7 @@ class PlayabilityAnalyzer:
                 self.config.num_frets,
                 self.config.tuning
             )
-            self.fretboard_matrix = fretboard_obj.getMatrix()
+            self.fretboard_matrix = fretboard_obj.get_matrix()
             
             logger.info(
                 f"Fretboard generated: {len(self.fretboard_matrix)} strings, "
@@ -209,7 +209,7 @@ class PlayabilityAnalyzer:
             
             for voice in range(1, 5):
                 for note in self.final_score[voice]:
-                    color = note.getColor()
+                    color = note.get_color()
                     if color in color_stats:
                         color_stats[color] += 1
             
@@ -234,7 +234,8 @@ class PlayabilityAnalyzer:
             
             # Generate colored XML
             colored_xml = write_colored_score(self.score_list, self.bar_objects)
-            
+            logger.info(f"Colored score generated: {len(colored_xml)} characters")
+
             # Save with dialog
             save_musicxml(colored_xml, "analyzed.musicxml")
             
@@ -297,23 +298,6 @@ def analyze_file(
     except Exception as e:
         logger.error(f"Analysis failed: {e}", exc_info=True)
         return False
-
-
-# ============================================================================
-# LEGACY COMPATIBILITY
-# ============================================================================
-
-def main(fileDir: str, strings: int, tuning: list) -> None:
-    """
-    Legacy entry point for backward compatibility.
-    
-    Args:
-        fileDir: Path to MusicXML file
-        strings: Number of guitar strings
-        tuning: List of tuning notes
-    """
-    logger.info("main() called (legacy interface)")
-    analyze_file(fileDir, strings, tuning)
 
 
 # ============================================================================

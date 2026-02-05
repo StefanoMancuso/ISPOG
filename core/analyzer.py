@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 
-from entities import Note
+from .entities import Note
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +63,15 @@ class ChordAnalyzer:
     def __init__(self):
         logger.debug("ChordAnalyzer initialized")
     
-    def analyze_chord(self, notes: List[nota]) -> None:
+    def analyze_chord(self, notes: List[Note]) -> None:
         """
         Main entry point: analyzes a chord and sets colors on notes.
         
         Args:
-            notes: List of nota objects to analyze
+            notes: List of Note objects to analyze
         """
         # Remove rests
-        chord_notes = [n for n in notes if n.getPitch()[0] != 'rest']
+        chord_notes = [n for n in notes if n.get_pitch()[0] != 'rest']
         
         if not chord_notes:
             logger.debug("Empty chord (all rests)")
@@ -87,7 +87,7 @@ class ChordAnalyzer:
         
         logger.debug(f"Chord playability: {best_fingering.playability.name}")
     
-    def _find_best_fingering(self, notes: List[nota]) -> FingeringAnalysis:
+    def _find_best_fingering(self, notes: List[Note]) -> FingeringAnalysis:
         """
         Finds the best fingering for a chord, trying different positions.
         
@@ -121,7 +121,7 @@ class ChordAnalyzer:
             reason="No valid fingering found"
         )
     
-    def _generate_fingering_options(self, notes: List[nota]) -> List[List[FretPosition]]:
+    def _generate_fingering_options(self, notes: List[Note]) -> List[List[FretPosition]]:
         """
         Generates all possible fingering combinations for the chord.
         Each note can be played on multiple positions.
@@ -136,7 +136,7 @@ class ChordAnalyzer:
                 return
             
             # Try each possible position for this note
-            for pos_tuple in notes[index].getFretPos():
+            for pos_tuple in notes[index].get_fret_pos():
                 pos = FretPosition(string=pos_tuple[0], fret=pos_tuple[1])
                 current_fingering.append(pos)
                 recurse(index + 1, current_fingering)
@@ -334,7 +334,7 @@ class ChordAnalyzer:
         # All good!
         return (Playability.PLAYABLE, "Playable")
     
-    def _apply_colors(self, notes: List[nota], analysis: FingeringAnalysis) -> None:
+    def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis) -> None:
         """Apply color codes to notes based on analysis."""
         color = analysis.playability.value
         
@@ -342,12 +342,12 @@ class ChordAnalyzer:
         for i, note in enumerate(notes):
             if i < len(analysis.positions):
                 pos = analysis.positions[i]
-                note.setFret((pos.string, pos.fret))
-            note.setColor(color)
+                note.set_fret((pos.string, pos.fret))
+            note.set_color(color)
         
         logger.debug(f"Applied color '{color}' to {len(notes)} notes: {analysis.reason}")
     
-    def _sort_notes_by_pitch(self, notes: List[nota]) -> List[nota]:
+    def _sort_notes_by_pitch(self, notes: List[Note]) -> List[Note]:
         """
         Sort notes by pitch (highest to lowest).
         Uses bubble sort for simplicity (lists are small).
@@ -356,8 +356,8 @@ class ChordAnalyzer:
         
         for i in range(len(sorted_notes)):
             for j in range(len(sorted_notes) - 1):
-                pitch1 = sorted_notes[j].getPitch()[0]
-                pitch2 = sorted_notes[j + 1].getPitch()[0]
+                pitch1 = sorted_notes[j].get_pitch()[0]
+                pitch2 = sorted_notes[j + 1].get_pitch()[0]
                 
                 # Compare octave first
                 octave1 = int(pitch1[-1])
@@ -377,15 +377,4 @@ class ChordAnalyzer:
         return sorted_notes
 
 
-# Public API function (backward compatible with old code)
-def colorChord(chord: List[nota]) -> None:
-    """
-    Analyzes chord playability and colors notes accordingly.
-    
-    This is the main function called from functions.py (backward compatible).
-    
-    Args:
-        chord: List of nota objects to analyze
-    """
-    analyzer = ChordAnalyzer()
-    analyzer.analyze_chord(chord)
+

@@ -12,7 +12,7 @@ from typing import Dict, List, Tuple
 
 APP_TITLE = "ISPOG"
 APP_FULL_NAME = "Is it Playable on Guitar?"
-WINDOW_SIZE = "400x400"  
+WINDOW_SIZE = "400x420"  
 WINDOW_RESIZABLE = True
 
 # ============================================================================
@@ -78,13 +78,15 @@ STANDARD_TUNING_INDICES = [52, 47, 43, 38, 33, 28, 23, 18]
 # ============================================================================
 
 SUPPORTED_FILE_TYPES = (
+    ('MusicXML files', '*.musicxml *.mxl'),
     ('MusicXML (uncompressed)', '*.musicxml'),
+    ('MusicXML (compressed)', '*.mxl'),
     ('All files', '*.*')
 )
 
 FILE_EXTENSIONS = {
     'musicxml': 'MusicXML',
-    'mxl': 'Compressed MusicXML (not supported)',
+    'mxl': 'Compressed MusicXML',
 }
 
 # ============================================================================

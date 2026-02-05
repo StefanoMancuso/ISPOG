@@ -78,19 +78,19 @@ class Bar:
             self._score_matrix[voice].append(note)
     
     # Getters (keep original names for backward compatibility)
-    def getIndexBar(self) -> int:
+    def get_index_bar(self) -> int:
         return self._index_bar
     
-    def getNotes(self) -> list['Note']:
+    def get_notes(self) -> list['Note']:
         return self._notes
     
-    def getNumBar(self) -> int:
+    def get_num_bar(self) -> int:
         return self._num_bar
     
-    def getScore(self) -> str:
+    def get_score(self) -> str:
         return self._score
     
-    def getScoreMatrix(self) -> dict[int, list['Note']]:
+    def get_score_matrix(self) -> dict[int, list['Note']]:
         return self._score_matrix
     
     def __str__(self) -> str:
@@ -183,14 +183,10 @@ class Fretboard:
         notes.reverse()
         return notes
     
-    def getMatrix(self) -> list[list[str]]:
+    def get_matrix(self) -> list[list[str]]:
         """Returns the fretboard matrix."""
         return self._matrix
-
-
-# Legacy alias
-fretboard = Fretboard
-
+    
 
 # ============================================================================
 # NOTE ENTITY
@@ -317,55 +313,51 @@ class Note:
                         self._fret_pos.append((string_idx + 1, fret_num))
     
     # Getters
-    def getColor(self) -> str:
+    def get_color(self) -> str:
         return self._color
     
-    def getDigit(self) -> int:
+    def get_digit(self) -> int:
         return self._digit
     
-    def getFret(self) -> tuple[int, int]:
+    def get_fret(self) -> tuple[int, int]:
         return self._fret
     
-    def getPitch(self) -> list[str]:
+    def get_pitch(self) -> list[str]:
         return self._pitch
     
-    def getValue(self) -> float:
+    def get_value(self) -> float:
         return self._value
     
-    def getVoice(self) -> int:
+    def get_voice(self) -> int:
         return self._voice
     
-    def isChord(self) -> bool:
+    def is_chord(self) -> bool:
         return self._is_chord
     
-    def isGrace(self) -> bool:
+    def is_grace(self) -> bool:
         return self._is_grace
     
-    def getPrevTied(self) -> bool:
+    def get_prev_tied(self) -> bool:
         return self._prev_tied
     
-    def getNextTied(self) -> bool:
+    def get_next_tied(self) -> bool:
         return self._next_tied
     
-    def getFretPos(self) -> list[tuple[int, int]]:
+    def get_fret_pos(self) -> list[tuple[int, int]]:
         return self._fret_pos
     
     # Setters
-    def setColor(self, color: str):
+    def set_color(self, color: str):
         self._color = color
     
-    def setDigit(self, digit: int):
+    def set_digit(self, digit: int):
         self._digit = digit
     
-    def setFret(self, fret: tuple[int, int]):
+    def set_fret(self, fret: tuple[int, int]):
         self._fret = fret
     
     def __str__(self) -> str:
         return str(self.__dict__)
-
-
-# Legacy alias
-nota = Note
 
 
 # ============================================================================
@@ -397,7 +389,3 @@ class NewNote(Note):
         self._digit = -1
         self._fret = (-1, -1)
         self._color = 'black'
-
-
-# Legacy alias
-newNote = NewNote

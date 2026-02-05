@@ -303,7 +303,7 @@ class ProcessButton(ttk.LabelFrame):
         filepath = self.file_selector.get_filepath()
         
         # Validate file extension
-        if not filepath.endswith('.musicxml'):
+        if not (filepath.endswith('.musicxml') or filepath.endswith('.mxl')):
             logger.warning(f'Invalid file extension: {filepath}')
             messagebox.showwarning(
                 title=UI_TEXT['file_error'],

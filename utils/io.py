@@ -5,6 +5,8 @@ Functions for loading and saving MusicXML files.
 """
 
 import logging
+import zipfile
+import tempfile
 from pathlib import Path
 from typing import Optional
 import tkinter.filedialog as fd
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 def load_musicxml(file_path: str) -> Optional[str]:
     """
     Load a MusicXML file and return its content.
+    Supports both .musicxml (uncompressed) and .mxl (compressed) formats.
     
     Args:
         file_path: Path to the MusicXML file
@@ -26,27 +29,11 @@ def load_musicxml(file_path: str) -> Optional[str]:
     logger.info(f"Loading MusicXML file: {file_path}")
     
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        
-        logger.info(f"Successfully loaded {len(content)} characters")
-        return content
-        
-    except FileNotFoundError:
-        logger.error(f"File not found: {file_path}")
-        showinfo(
-            title='File Error',
-            message=f'File not found:\n{file_path}'
-        )
-        return None
-        
-    except UnicodeDecodeError:
-        logger.error(f"Encoding error reading file: {file_path}")
-        showinfo(
-            title='File Error',
-            message='File encoding error. Make sure it\'s a valid MusicXML file.'
-        )
-        return None
+        # Check if it's a compressed file (.mxl)
+        if file_path.lower().endswith('.mxl'):
+            return _load_compressed_mxl(file_path)
+        else:
+            return _load_uncompressed_musicxml(file_path)
         
     except Exception as e:
         logger.error(f"Error loading file: {e}", exc_info=True)
@@ -55,6 +42,59 @@ def load_musicxml(file_path: str) -> Optional[str]:
             message=f'Error loading file:\n{str(e)}'
         )
         return None
+
+
+def _load_uncompressed_musicxml(file_path: str) -> str:
+    """Load uncompressed .musicxml file."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    logger.info(f"Successfully loaded {len(content)} characters")
+    return content
+
+
+def _load_compressed_mxl(file_path: str) -> str:
+    """
+    Load and decompress .mxl file.
+    
+    MXL files are ZIP archives containing:
+    - META-INF/container.xml (points to the main .musicxml file)
+    - One or more .musicxml files
+    """
+    logger.info(f"Decompressing MXL file: {file_path}")
+    
+    with zipfile.ZipFile(file_path, 'r') as zip_file:
+        # Find the main musicxml file
+        # Usually it's referenced in META-INF/container.xml
+        musicxml_file = None
+        
+        # Try to read container.xml
+        try:
+            container = zip_file.read('META-INF/container.xml').decode('utf-8')
+            # Extract rootfile path from container.xml
+            import re
+            match = re.search(r'full-path="([^"]+\.musicxml)"', container)
+            if match:
+                musicxml_file = match.group(1)
+                logger.debug(f"Found main file in container: {musicxml_file}")
+        except KeyError:
+            logger.warning("No container.xml found, searching for .musicxml")
+        
+        # Fallback: find first .musicxml file
+        if not musicxml_file:
+            for name in zip_file.namelist():
+                if name.endswith('.musicxml'):
+                    musicxml_file = name
+                    logger.debug(f"Using first .musicxml found: {musicxml_file}")
+                    break
+        
+        if not musicxml_file:
+            raise ValueError("No .musicxml file found in .mxl archive")
+        
+        # Extract and read the musicxml content
+        content = zip_file.read(musicxml_file).decode('utf-8')
+        logger.info(f"Successfully decompressed {len(content)} characters")
+        return content
 
 
 def save_musicxml(content: str, default_name: str = "output.musicxml") -> bool:

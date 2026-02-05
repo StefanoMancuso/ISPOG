@@ -8,8 +8,8 @@ import re
 import logging
 from typing import Tuple, Dict, List
 
-from core.entities import Note, Bar, newNote
-from core.analyzer import ChordAnalyzer
+from .entities import Note, Bar, NewNote
+from .analyzer import ChordAnalyzer
 
 # Import color codes
 try:
@@ -112,7 +112,7 @@ def merge_bars_to_score(bars: List[Bar]) -> Dict[int, List[Note]]:
     score: Dict[int, List[Note]] = {1: [], 2: [], 3: [], 4: []}
     
     for bar in bars:
-        bar_score = bar.getScoreMatrix()
+        bar_score = bar.get_score_matrix()
         
         # Calculate max duration in this bar
         durations = [0.0, 0.0, 0.0, 0.0]
@@ -120,8 +120,8 @@ def merge_bars_to_score(bars: List[Bar]) -> Dict[int, List[Note]]:
         for voice in range(1, 5):
             if voice in bar_score:
                 for note in bar_score[voice]:
-                    if not note.isChord():
-                        durations[voice - 1] += note.getValue()
+                    if not note.is_chord():
+                        durations[voice - 1] += note.get_value()
         
         max_duration = max(durations)
         logger.debug(f"Bar max duration: {max_duration}")
@@ -132,13 +132,13 @@ def merge_bars_to_score(bars: List[Bar]) -> Dict[int, List[Note]]:
                 voice_duration = 0.0
                 for note in bar_score[voice]:
                     score[voice].append(note)
-                    if not note.isChord():
-                        voice_duration += note.getValue()
+                    if not note.is_chord():
+                        voice_duration += note.get_value()
                 
                 # Add rest if needed
                 if voice_duration < max_duration:
                     rest_duration = max_duration - voice_duration
-                    rest = newNote({
+                    rest = NewNote({
                         'pitch': ['rest', '0'],
                         'value': rest_duration,
                         'voice': voice
@@ -146,7 +146,7 @@ def merge_bars_to_score(bars: List[Bar]) -> Dict[int, List[Note]]:
                     score[voice].append(rest)
             else:
                 # Full rest for this voice
-                rest = newNote({
+                rest = NewNote({
                     'pitch': ['rest', '0'],
                     'value': max_duration,
                     'voice': voice
@@ -203,14 +203,14 @@ def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
                 note = score[voice][voice_indices[voice]]
                 concurrent_notes.append(note)
                 
-                if not note.isChord():
-                    voice_times[voice] += note.getValue()
+                if not note.is_chord():
+                    voice_times[voice] += note.get_value()
                 voice_indices[voice] += 1
                 
                 # Check for chord notes
                 while voice_indices[voice] < len(score[voice]):
                     next_note = score[voice][voice_indices[voice]]
-                    if next_note.isChord():
+                    if next_note.is_chord():
                         concurrent_notes.append(next_note)
                         voice_indices[voice] += 1
                     else:
@@ -248,29 +248,43 @@ def write_colored_score(original_measures: List[str], bars: List[Bar]) -> str:
     """
     logger.info("Writing colored score to MusicXML")
     
+    # Start with header (everything before first <measure>)
     output = original_measures[0]
     
-    for i, bar_obj in enumerate(bars, start=1):
-        measure_str = bar_obj.getScore()
-        notes = bar_obj.getNotes()
+    # Process each measure
+    for i, bar_obj in enumerate(bars, start=0):  
+        if i + 1 >= len(original_measures):
+            logger.warning(f"Missing original measure {i+1}")
+            break
+            
+        measure_str = original_measures[i + 1]  
+        notes = bar_obj.get_notes()
         
+        # Split measure into notes
         note_parts = re.split('<note ', measure_str)
-        output += '<measure ' + note_parts[0]
         
+        # Reconstruct with header intact
+        output += '<measure ' + note_parts[0]  
+        
+        note_index = 0
         for j in range(1, len(note_parts)):
             note_str = note_parts[j]
             
+            # Check if this is a rest (skip coloring)
             if '<rest' in note_str:
                 output += '<note ' + note_str
                 continue
             
-            if j - 1 < len(notes):
-                note_obj = notes[j - 1]
-                color = note_obj.getColor()
+            # Get corresponding note object
+            if note_index < len(notes):
+                note_obj = notes[note_index]
+                color = note_obj.get_color()
                 color_code = COLOR_CODES.get(color, COLOR_CODES['black'])
                 
+                # Split at </note> to insert color
                 parts = re.split('</note', note_str)
                 if len(parts) == 2:
+                    # Insert notehead color before </note>
                     colored = (
                         parts[0] + 
                         f'<notehead color={color_code}>normal</notehead>\n\t\t\t\t'
@@ -279,6 +293,8 @@ def write_colored_score(original_measures: List[str], bars: List[Bar]) -> str:
                     output += '<note ' + colored
                 else:
                     output += '<note ' + note_str
+                
+                note_index += 1
             else:
                 output += '<note ' + note_str
     
@@ -316,11 +332,11 @@ def create_debug_note_list(score: Dict[int, List[Note]], output_path: str) -> No
                 for note in score[voice]:
                     try:
                         f.write(
-                            f'Pitch: {note.getPitch()}, '
-                            f'Value: {note.getValue()}, '
-                            f'Fret: {note.getFret()}, '
-                            f'Color: {note.getColor()}, '
-                            f'IsChord: {note.isChord()}\n'
+                            f'Pitch: {note.get_pitch()}, '
+                            f'Value: {note.get_value()}, '
+                            f'Fret: {note.get_fret()}, '
+                            f'Color: {note.get_color()}, '
+                            f'IsChord: {note.is_chord()}\n'
                         )
                     except Exception as e:
                         f.write(f'ERROR: {e}\n')
@@ -332,17 +348,3 @@ def create_debug_note_list(score: Dict[int, List[Note]], output_path: str) -> No
     except Exception as e:
         logger.error(f"Error creating debug file: {e}", exc_info=True)
 
-
-# ============================================================================
-# LEGACY COMPATIBILITY
-# ============================================================================
-
-# Keep old names for backward compatibility
-makeBarList = parse_measures
-mergeBarList = merge_bars_to_score
-makeColor = analyze_score_playability
-rewriteScore = write_colored_score  # Note: returns string, doesn't save
-addMark = add_ispog_credit
-noExtension = remove_file_extension
-debugNoteList = create_debug_note_list
-colorChord = analyze_chord_playability
