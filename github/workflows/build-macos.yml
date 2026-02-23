@@ -1,0 +1,39 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install tcl-tk and dependencies
+        run: brew install tcl-tk
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build .app bundle
+        run: python -m PyInstaller --name ISPOG --windowed --noconsole --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.filedialog --hidden-import tkinter.messagebox main.py
+
+      - name: Zip .app for download
+        run: zip -r ISPOG-macOS.zip dist/ISPOG.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ISPOG-macOS
+          path: ISPOG-macOS.zip
+```
+

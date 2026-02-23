@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from config import LOG_DIR, LOG_FORMAT, LOG_DATE_FORMAT
-from utils.io import resource_path
+from utils.io import writable_path
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -36,7 +36,7 @@ def setup_file_logging(level: int = logging.DEBUG) -> Path:
         Path to the log file
     """
     # Create logs directory
-    log_dir = resource_path(LOG_DIR)
+    log_dir = writable_path(LOG_DIR)
     log_dir.mkdir(exist_ok=True)
     
     # Generate log filename with timestamp

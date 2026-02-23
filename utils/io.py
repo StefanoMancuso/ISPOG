@@ -5,6 +5,7 @@ Functions for loading and saving MusicXML files.
 """
 
 import logging
+import os
 import zipfile
 import tempfile
 import sys
@@ -148,9 +149,14 @@ def save_musicxml(content: str, default_name: str = "output.musicxml") -> bool:
         return False
     
 def resource_path(relative_path: str) -> Path:
-    """
-    Ottiene il path corretto sia in sviluppo che in exe PyInstaller
-    """
+    """Path per risorse bundlate (read-only)."""
     if hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS) / relative_path
+    return Path(relative_path)
+
+def writable_path(relative_path: str) -> Path:
+    if hasattr(sys, "_MEIPASS"):
+        app_data = Path(os.environ.get("APPDATA", Path.home())) / "ISPOG"
+        app_data.mkdir(exist_ok=True)
+        return app_data / relative_path
     return Path(relative_path)
