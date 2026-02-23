@@ -89,24 +89,34 @@ class ChordAnalyzer:
     
     def _find_best_fingering(self, notes: List[Note]) -> FingeringAnalysis:
         """
-        Finds the best fingering for a chord, trying different positions.
-        
-        Returns the most playable fingering found.
+        Finds the best fingering, trying different positions.
+        Returns most playable option, prioritizing already-assigned frets.
         """
-        # Sort notes by pitch (highest to lowest)
         sorted_notes = self._sort_notes_by_pitch(notes)
         
-        # Try all possible position combinations
+        # Check if any notes already have assigned frets (from previous analysis)
+        has_prior_assignments = any(n.get_fret() != (-1, -1) for n in sorted_notes)
+        
+        if has_prior_assignments:
+            # Try to respect existing assignments first
+            constrained_fingering = self._try_constrained_fingering(sorted_notes)
+            if constrained_fingering and constrained_fingering.playability != Playability.UNPLAYABLE:
+                return constrained_fingering
+            
+            # If constrained fails, clear assignments and try fresh
+            logger.debug("Prior assignments failed, trying fresh fingerings")
+            for note in sorted_notes:
+                note.set_fret((-1, -1))
+        
+        # Standard algorithm
         best_result = None
         best_playability = Playability.UNPLAYABLE
         
-        # Generate all valid fingering options
         for fingering_option in self._generate_fingering_options(sorted_notes):
             analysis = self._analyze_fingering(fingering_option)
             
-            # Keep best result
             if analysis.playability.value == "green":
-                return analysis  # Found perfect solution
+                return analysis
             elif analysis.playability.value == "orange" and best_playability != Playability.PLAYABLE:
                 best_result = analysis
                 best_playability = Playability.DIFFICULT
@@ -120,6 +130,27 @@ class ChordAnalyzer:
             has_barre=False,
             reason="No valid fingering found"
         )
+
+    def _try_constrained_fingering(self, notes: List[Note]) -> Optional[FingeringAnalysis]:
+        """
+        Try fingering respecting already-assigned fret positions.
+        Used for notes that were analyzed earlier and are still active.
+        """
+        positions = []
+        
+        for note in notes:
+            assigned_fret = note.get_fret()
+            if assigned_fret != (-1, -1):
+                # Use existing assignment
+                positions.append(FretPosition(string=assigned_fret[0], fret=assigned_fret[1]))
+            else:
+                # No prior assignment - this shouldn't happen in constrained mode
+                return None
+        
+        if not self._has_no_string_conflicts(positions):
+            return None
+        
+        return self._analyze_fingering(positions)
     
     def _generate_fingering_options(self, notes: List[Note]) -> List[List[FretPosition]]:
         """
@@ -209,59 +240,77 @@ class ChordAnalyzer:
     
     def _detect_barre(self, fretted_positions: List[FretPosition]) -> dict:
         """
-        Detects if a barré is present and whether it's with index or pinky.
+        Detects valid barré considering realistic finger limitations.
         
-        Barré = multiple notes on the same fret.
-        Index barré = barré on the lowest fret (most common)
-        Pinky barré = barré on the highest fret (difficult)
+        INDEX BARRÉ (lowest fret):
+        - Can cover any combination of strings (contiguous or not)
+        - Most common and versatile
+        
+        PINKY BARRÉ (highest fret):
+        - ONLY valid on strings from 1 to 4 (contiguous, starting from string 1)
+        - All other notes must be on LOWER frets or open strings
         """
         if len(fretted_positions) < 2:
             return {'has_barre': False}
         
-        # Count notes per fret
-        fret_counts = {}
+        # Group positions by fret
+        fret_groups = {}
         for pos in fretted_positions:
-            fret_counts[pos.fret] = fret_counts.get(pos.fret, 0) + 1
+            if pos.fret not in fret_groups:
+                fret_groups[pos.fret] = []
+            fret_groups[pos.fret].append(pos.string)
         
-        # Find barré candidates (2+ notes on same fret)
-        barre_frets = [fret for fret, count in fret_counts.items() if count >= 2]
+        # Find frets with 2+ notes
+        barre_candidates = {fret: strings for fret, strings in fret_groups.items() 
+                            if len(strings) >= 2}
         
-        if not barre_frets:
+        if not barre_candidates:
             return {'has_barre': False}
         
-        # Check if barré is on lowest fret (index finger) or highest (pinky)
         min_fret = min(pos.fret for pos in fretted_positions)
         max_fret = max(pos.fret for pos in fretted_positions)
         
-        if min_fret in barre_frets:
-            # Index barré (normal)
-            notes_in_barre = sum(1 for p in fretted_positions if p.fret == min_fret)
+        # Check for INDEX BARRÉ (lowest fret, no restrictions on string layout)
+        if min_fret in barre_candidates:
+            strings = sorted(barre_candidates[min_fret])
+            logger.debug(f"Index barré detected: fret {min_fret}, strings {strings}")
             return {
                 'has_barre': True,
                 'fret': min_fret,
                 'type': 'index',
-                'notes_count': notes_in_barre
+                'notes_count': len(strings)
             }
-        elif max_fret in barre_frets:
-            # Pinky barré (difficult)
-            notes_in_barre = sum(1 for p in fretted_positions if p.fret == max_fret)
-            return {
-                'has_barre': True,
-                'fret': max_fret,
-                'type': 'pinky',
-                'notes_count': notes_in_barre
-            }
-        else:
-            # Barré on middle fret (weird but possible)
-            barre_fret = barre_frets[0]
-            notes_in_barre = sum(1 for p in fretted_positions if p.fret == barre_fret)
-            return {
-                'has_barre': True,
-                'fret': barre_fret,
-                'type': 'middle',
-                'notes_count': notes_in_barre
-            }
-    
+        
+        # Check for PINKY BARRÉ (highest fret, strict requirements)
+        if max_fret in barre_candidates:
+            strings = sorted(barre_candidates[max_fret])
+            
+            # Pinky barré requirements:
+            # 1. Must start from string 1 (highest pitched)
+            # 2. Strings must be contiguous
+            # 3. Maximum 4 strings (1-2-3-4)
+            
+            is_valid_pinky = (
+                strings[0] == 1 and  # Starts from string 1
+                len(strings) <= 4 and  # Max 4 strings
+                all(strings[i+1] - strings[i] == 1 for i in range(len(strings) - 1))  # Contiguous
+            )
+            
+            if is_valid_pinky:
+                logger.debug(f"Valid pinky barré: fret {max_fret}, strings {strings}")
+                return {
+                    'has_barre': True,
+                    'fret': max_fret,
+                    'type': 'pinky',
+                    'notes_count': len(strings)
+                }
+            else:
+                logger.debug(f"Invalid pinky barré (strings {strings} don't meet requirements)")
+        
+        # No valid barré found
+        logger.debug("No valid barré configuration found")
+        return {'has_barre': False}
+
     def _count_fingers_needed(self, fretted_positions: List[FretPosition], 
                               barre_info: dict) -> int:
         """

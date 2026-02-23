@@ -1,0 +1,174 @@
+2026-02-09 12:33:34 - utils.logger - INFO - ============================================================
+2026-02-09 12:33:34 - utils.logger - INFO - ISPOG Logging initialized
+2026-02-09 12:33:34 - utils.logger - INFO - Log file: logs\ispog_20260209_123334.log
+2026-02-09 12:33:34 - utils.logger - INFO - ============================================================
+2026-02-09 12:33:34 - __main__ - INFO - ISPOG v0.9.0-alpha (2026-02-05) started
+2026-02-09 12:33:34 - __main__ - INFO - Initializing GUI...
+2026-02-09 12:33:35 - gui.main_window - INFO - Initializing main window
+2026-02-09 12:33:35 - gui.widgets - DEBUG - FileSelectorWidget initialized
+2026-02-09 12:33:35 - gui.widgets - DEBUG - Applied preset tuning: Standard
+2026-02-09 12:33:35 - gui.widgets - DEBUG - TuningWidget initialized
+2026-02-09 12:33:35 - gui.widgets - DEBUG - ProcessButton initialized
+2026-02-09 12:33:35 - gui.main_window - INFO - Main window initialized successfully
+2026-02-09 12:33:35 - gui.main_window - DEBUG - Version set to: 0.9.0-alpha (2026-02-05)
+2026-02-09 12:33:35 - __main__ - INFO - Starting main loop...
+2026-02-09 12:33:36 - gui.widgets - INFO - Opening file selection dialog
+2026-02-09 12:33:56 - gui.widgets - INFO - File selected: C:/Users/stefa/Documents/python/GuitarDigit/test xml/test10.musicxml
+2026-02-09 12:33:58 - gui.widgets - INFO - === Analysis started ===
+2026-02-09 12:33:58 - gui.widgets - INFO - Processing file: C:/Users/stefa/Documents/python/GuitarDigit/test xml/test10.musicxml
+2026-02-09 12:33:58 - gui.widgets - INFO - Configuration: 6 strings, tuning: ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']
+2026-02-09 12:33:58 - core.processor - INFO - ============================================================
+2026-02-09 12:33:58 - core.processor - INFO - Playability Analyzer initialized
+2026-02-09 12:33:58 - core.processor - INFO - File: C:/Users/stefa/Documents/python/GuitarDigit/test xml/test10.musicxml
+2026-02-09 12:33:58 - core.processor - INFO - Strings: 6
+2026-02-09 12:33:58 - core.processor - INFO - Tuning: ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']
+2026-02-09 12:33:58 - core.processor - INFO - Frets: 19
+2026-02-09 12:33:58 - core.processor - INFO - ============================================================
+2026-02-09 12:33:58 - core.processor - INFO - Starting analysis workflow
+2026-02-09 12:33:58 - core.processor - INFO - Step 1: Loading MusicXML file
+2026-02-09 12:33:58 - utils.io - INFO - Loading MusicXML file: C:/Users/stefa/Documents/python/GuitarDigit/test xml/test10.musicxml
+2026-02-09 12:33:58 - utils.io - INFO - Successfully loaded 8281 characters
+2026-02-09 12:33:58 - core.processor - INFO - Loaded 8281 characters
+2026-02-09 12:33:58 - core.processor - INFO - Step 2: Generating fretboard matrix
+2026-02-09 12:33:58 - core.entities - DEBUG - Creating Fretboard: 6 strings, 19 frets
+2026-02-09 12:33:58 - core.processor - INFO - Fretboard generated: 6 strings, 20 positions per string
+2026-02-09 12:33:58 - core.processor - INFO - Step 3: Parsing measures
+2026-02-09 12:33:58 - core.musicxml - INFO - Parsing measures from MusicXML
+2026-02-09 12:33:58 - core.musicxml - INFO - Found 2 measures
+2026-02-09 12:33:58 - core.entities - DEBUG - Creating Bar 1
+2026-02-09 12:33:58 - core.entities - DEBUG - Bar 1, width: 576.75
+2026-02-09 12:33:58 - core.entities - DEBUG - Found 6 notes in bar 1
+2026-02-09 12:33:58 - core.entities - DEBUG - Creating Bar 2
+2026-02-09 12:33:58 - core.entities - DEBUG - Bar 2, width: 402.28
+2026-02-09 12:33:58 - core.entities - DEBUG - Found 8 notes in bar 2
+2026-02-09 12:33:58 - core.musicxml - INFO - Successfully parsed 2 bar objects
+2026-02-09 12:33:58 - core.processor - INFO - Parsed 2 measures
+2026-02-09 12:33:58 - core.processor - INFO - Step 4: Merging bars into continuous score
+2026-02-09 12:33:58 - core.musicxml - INFO - Merging 2 bars into continuous score
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Bar max duration: 4.0
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Bar max duration: 4.0
+2026-02-09 12:33:58 - core.musicxml - INFO - Voice 1: 5 notes
+2026-02-09 12:33:58 - core.musicxml - INFO - Voice 2: 10 notes
+2026-02-09 12:33:58 - core.musicxml - INFO - Voice 3: 2 notes
+2026-02-09 12:33:58 - core.musicxml - INFO - Voice 4: 2 notes
+2026-02-09 12:33:58 - core.processor - INFO - Voice 1: 5 notes
+2026-02-09 12:33:58 - core.processor - INFO - Voice 2: 10 notes
+2026-02-09 12:33:58 - core.processor - INFO - Voice 3: 2 notes
+2026-02-09 12:33:58 - core.processor - INFO - Voice 4: 2 notes
+2026-02-09 12:33:58 - core.processor - INFO - Step 5: Analyzing playability
+2026-02-09 12:33:58 - core.musicxml - INFO - Analyzing score playability
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Time 0.0: 3 notes (including 3 active)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - ChordAnalyzer initialized
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Analyzing chord with 3 notes
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Generated 36 fingering options
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Index barré detected: fret 1, strings [1, 2]
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 2 (barré: True)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Applied color 'green' to 3 notes: Playable
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Chord playability: PLAYABLE
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Time 1.0: 3 notes (including 3 active)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - ChordAnalyzer initialized
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Analyzing chord with 3 notes
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Prior assignments failed, trying fresh fingerings
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Generated 43 fingering options
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 2 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Applied color 'green' to 3 notes: Playable
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Chord playability: PLAYABLE
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Time 2.0: 3 notes (including 3 active)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - ChordAnalyzer initialized
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Analyzing chord with 3 notes
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Prior assignments failed, trying fresh fingerings
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Generated 30 fingering options
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [3, 4] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Index barré detected: fret 7, strings [3, 4]
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 2 (barré: True)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [4, 5] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [4, 5] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [5, 6] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [5, 6] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [5, 6] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Applied color 'orange' to 3 notes: Maximum fret span (stretchy)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Chord playability: DIFFICULT
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Time 3.0: 3 notes (including 3 active)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - ChordAnalyzer initialized
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Analyzing chord with 3 notes
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Prior assignments failed, trying fresh fingerings
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Generated 36 fingering options
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Applied color 'green' to 3 notes: Playable
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Chord playability: PLAYABLE
+2026-02-09 12:33:58 - core.musicxml - DEBUG - Time 4.0: 6 notes (including 6 active)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - ChordAnalyzer initialized
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Analyzing chord with 6 notes
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Generated 8 fingering options
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Invalid pinky barré (strings [1, 2, 4] don't meet requirements)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 5 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 4 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - No valid barré configuration found
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 4 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 4 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 3 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Fingers needed: 2 (barré: False)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Applied color 'red' to 6 notes: Requires 5 fingers (max 4)
+2026-02-09 12:33:58 - core.analyzer - DEBUG - Chord playability: UNPLAYABLE
+2026-02-09 12:33:58 - core.musicxml - INFO - Playability analysis complete
+2026-02-09 12:33:58 - core.processor - INFO - Playability analysis complete:
+2026-02-09 12:33:58 - core.processor - INFO -   🟢 Playable (green): 5
+2026-02-09 12:33:58 - core.processor - INFO -   🟠 Difficult (orange): 1
+2026-02-09 12:33:58 - core.processor - INFO -   🔴 Unplayable (red): 6
+2026-02-09 12:33:58 - core.processor - INFO -   ⚫ Other (black): 7
+2026-02-09 12:33:58 - core.processor - INFO - Step 6: Writing colored output
+2026-02-09 12:33:58 - core.musicxml - INFO - Writing colored score to MusicXML
+2026-02-09 12:33:58 - core.musicxml - INFO - Colored score written successfully
+2026-02-09 12:33:58 - core.processor - INFO - Colored score generated: 8857 characters
+2026-02-09 12:33:58 - utils.io - INFO - Opening save dialog
+2026-02-09 12:34:04 - utils.io - INFO - File saved successfully: C:/Users/stefa/Desktop/analyzed.musicxml
+2026-02-09 12:34:05 - core.processor - INFO - Colored score written and saved
+2026-02-09 12:34:05 - core.processor - INFO - Step 7: Generating debug file
+2026-02-09 12:34:05 - core.musicxml - INFO - Creating debug note list
+2026-02-09 12:34:05 - core.musicxml - INFO - Debug file created: C:/Users/stefa/Documents/python/GuitarDigit/test xml/test10_noteList.txt
+2026-02-09 12:34:05 - core.processor - INFO - Debug file generated
+2026-02-09 12:34:05 - core.processor - INFO - ============================================================
+2026-02-09 12:34:05 - core.processor - INFO - Analysis workflow completed successfully!
+2026-02-09 12:34:05 - core.processor - INFO - ============================================================
+2026-02-09 12:34:05 - gui.widgets - INFO - Analysis completed successfully
+2026-02-09 12:34:06 - gui.widgets - INFO - === Analysis finished ===
+2026-02-09 12:34:08 - __main__ - INFO - Application closed normally

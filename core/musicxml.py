@@ -186,12 +186,30 @@ def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
     
     voice_indices = {1: 0, 2: 0, 3: 0, 4: 0}
     voice_times = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+    
+    # Track active notes: {voice: [(note, end_time), ...]}
+    active_notes: Dict[int, List[Tuple[Note, float]]] = {1: [], 2: [], 3: [], 4: []}
+    
     voices_finished = 0
     current_time = 0.0
     
     while voices_finished < 4:
         concurrent_notes: List[Note] = []
         
+        # 1. Remove ended notes from active_notes
+        for voice in range(1, 5):
+            active_notes[voice] = [
+                (note, end_time) for note, end_time in active_notes[voice]
+                if end_time > current_time + 0.001
+            ]
+        
+        # 2. Add still-active notes to concurrent_notes
+        for voice in range(1, 5):
+            for note, _ in active_notes[voice]:
+                if note.get_pitch()[0] != 'rest':
+                    concurrent_notes.append(note)
+        
+        # 3. Process new notes starting at current_time
         for voice in range(1, 5):
             if voice_indices[voice] >= len(score[voice]):
                 if voice_indices[voice] == len(score[voice]):
@@ -201,25 +219,35 @@ def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
             
             if abs(voice_times[voice] - current_time) < 0.001:
                 note = score[voice][voice_indices[voice]]
-                concurrent_notes.append(note)
+                new_notes = [note]
                 
                 if not note.is_chord():
                     voice_times[voice] += note.get_value()
                 voice_indices[voice] += 1
                 
-                # Check for chord notes
+                # Collect chord notes
                 while voice_indices[voice] < len(score[voice]):
                     next_note = score[voice][voice_indices[voice]]
                     if next_note.is_chord():
-                        concurrent_notes.append(next_note)
+                        new_notes.append(next_note)
                         voice_indices[voice] += 1
                     else:
                         break
+                
+                # Add new notes to concurrent and active tracking
+                for n in new_notes:
+                    if n.get_pitch()[0] != 'rest':
+                        concurrent_notes.append(n)
+                        end_time = current_time + n.get_value()
+                        active_notes[voice].append((n, end_time))
         
+        # 4. Analyze playability
         if concurrent_notes:
-            logger.debug(f"Time {current_time}: {len(concurrent_notes)} concurrent notes")
+            logger.debug(f"Time {current_time}: {len(concurrent_notes)} notes "
+                        f"(including {sum(len(v) for v in active_notes.values())} active)")
             analyze_chord_playability(concurrent_notes)
         
+        # 5. Advance time
         if voices_finished < 4:
             next_times = [voice_times[v] for v in range(1, 5) 
                          if voice_indices[v] < len(score[v])]
@@ -229,7 +257,6 @@ def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
                 break
     
     logger.info("Playability analysis complete")
-
 
 # ============================================================================
 # MUSICXML OUTPUT

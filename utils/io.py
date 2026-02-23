@@ -7,6 +7,7 @@ Functions for loading and saving MusicXML files.
 import logging
 import zipfile
 import tempfile
+import sys
 from pathlib import Path
 from typing import Optional
 import tkinter.filedialog as fd
@@ -145,3 +146,11 @@ def save_musicxml(content: str, default_name: str = "output.musicxml") -> bool:
             message=f'Error saving file:\n{str(e)}'
         )
         return False
+    
+def resource_path(relative_path: str) -> Path:
+    """
+    Ottiene il path corretto sia in sviluppo che in exe PyInstaller
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / relative_path
+    return Path(relative_path)
