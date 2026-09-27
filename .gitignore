@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Build PyInstaller (gli eseguibili vanno su Hugging Face, non in git)
+build/
+dist/
+*.exe
+
+# Log e output di debug
+logs/
+*.log
+*_noteList.txt
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+# Contesto per Claude (generato)
+context*.txt

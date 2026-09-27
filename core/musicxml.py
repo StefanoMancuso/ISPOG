@@ -6,7 +6,7 @@ Functions for parsing, processing, and writing MusicXML files.
 
 import re
 import logging
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 
 from .entities import Note, Bar, NewNote
 from .analyzer import ChordAnalyzer
@@ -163,99 +163,74 @@ def merge_bars_to_score(bars: List[Bar]) -> Dict[int, List[Note]]:
 # PLAYABILITY ANALYSIS
 # ============================================================================
 
-def analyze_chord_playability(notes: List[Note]) -> None:
-    """
-    Analyze chord playability and color notes accordingly.
-    Uses ChordAnalyzer.
-    
-    Args:
-        notes: List of concurrent notes to analyze
-    """
-    analyzer = ChordAnalyzer()
-    analyzer.analyze_chord(notes)
-
-
 def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
     """
-    Analyze entire score for playability by finding concurrent notes.
-    
-    Args:
-        score: Dictionary mapping voice to note list
+    Walk the score in time. At each onset, new notes are analyzed against
+    notes still sounding (sustained), which act as fixed constraints.
     """
     logger.info("Analyzing score playability")
-    
-    voice_indices = {1: 0, 2: 0, 3: 0, 4: 0}
-    voice_times = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
-    
-    # Track active notes: {voice: [(note, end_time), ...]}
-    active_notes: Dict[int, List[Tuple[Note, float]]] = {1: [], 2: [], 3: [], 4: []}
-    
+
+    analyzer = ChordAnalyzer()
+    voice_indices = {v: 0 for v in range(1, 5)}
+    voice_times = {v: 0.0 for v in range(1, 5)}
+    active_notes: Dict[int, List[Tuple[Note, float]]] = {v: [] for v in range(1, 5)}
+
     voices_finished = 0
     current_time = 0.0
-    
+
     while voices_finished < 4:
-        concurrent_notes: List[Note] = []
-        
-        # 1. Remove ended notes from active_notes
+        # 1. Drop ended notes
         for voice in range(1, 5):
             active_notes[voice] = [
-                (note, end_time) for note, end_time in active_notes[voice]
-                if end_time > current_time + 0.001
+                (note, end) for note, end in active_notes[voice]
+                if end > current_time + 0.001
             ]
-        
-        # 2. Add still-active notes to concurrent_notes
-        for voice in range(1, 5):
-            for note, _ in active_notes[voice]:
-                if note.get_pitch()[0] != 'rest':
-                    concurrent_notes.append(note)
-        
-        # 3. Process new notes starting at current_time
+
+        # 2. Snapshot sustained notes (before adding new onsets)
+        sustained_notes = [note for v in range(1, 5) for note, _ in active_notes[v]]
+
+        # 3. Collect notes attacked at current_time
+        new_notes: List[Note] = []
         for voice in range(1, 5):
             if voice_indices[voice] >= len(score[voice]):
                 if voice_indices[voice] == len(score[voice]):
                     voices_finished += 1
                     voice_indices[voice] += 1
                 continue
-            
+
             if abs(voice_times[voice] - current_time) < 0.001:
                 note = score[voice][voice_indices[voice]]
-                new_notes = [note]
-                
+                onset = [note]
                 if not note.is_chord():
                     voice_times[voice] += note.get_value()
                 voice_indices[voice] += 1
-                
-                # Collect chord notes
+
                 while voice_indices[voice] < len(score[voice]):
                     next_note = score[voice][voice_indices[voice]]
-                    if next_note.is_chord():
-                        new_notes.append(next_note)
-                        voice_indices[voice] += 1
-                    else:
+                    if not next_note.is_chord():
                         break
-                
-                # Add new notes to concurrent and active tracking
-                for n in new_notes:
+                    onset.append(next_note)
+                    voice_indices[voice] += 1
+
+                for n in onset:
                     if n.get_pitch()[0] != 'rest':
-                        concurrent_notes.append(n)
-                        end_time = current_time + n.get_value()
-                        active_notes[voice].append((n, end_time))
-        
-        # 4. Analyze playability
-        if concurrent_notes:
-            logger.debug(f"Time {current_time}: {len(concurrent_notes)} notes "
-                        f"(including {sum(len(v) for v in active_notes.values())} active)")
-            analyze_chord_playability(concurrent_notes)
-        
+                        new_notes.append(n)
+                        active_notes[voice].append((n, current_time + n.get_value()))
+
+        # 4. Analyze new notes against sustained constraints
+        if new_notes:
+            logger.debug(f"Time {current_time}: {len(new_notes)} new, "
+                         f"{len(sustained_notes)} sustained")
+            analyzer.analyze_chord(new_notes, sustained_notes)
+
         # 5. Advance time
         if voices_finished < 4:
-            next_times = [voice_times[v] for v in range(1, 5) 
-                         if voice_indices[v] < len(score[v])]
-            if next_times:
-                current_time = min(next_times)
-            else:
+            next_times = [voice_times[v] for v in range(1, 5)
+                          if voice_indices[v] < len(score[v])]
+            if not next_times:
                 break
-    
+            current_time = min(next_times)
+
     logger.info("Playability analysis complete")
 
 # ============================================================================
@@ -265,68 +240,53 @@ def analyze_score_playability(score: Dict[int, List[Note]]) -> None:
 def write_colored_score(original_measures: List[str], bars: List[Bar]) -> str:
     """
     Reconstruct MusicXML with note colors applied.
-    
-    Args:
-        original_measures: Original measure strings (includes header at [0])
-        bars: Bar objects with colored notes
-        
-    Returns:
-        Complete MusicXML string with colors
+    XML <note> parts and Bar.get_notes() are aligned 1:1 (rests included),
+    since both come from splitting the same measure string on '<note '.
     """
     logger.info("Writing colored score to MusicXML")
-    
-    # Start with header (everything before first <measure>)
-    output = original_measures[0]
-    
-    # Process each measure
-    for i, bar_obj in enumerate(bars, start=0):  
-        if i + 1 >= len(original_measures):
-            logger.warning(f"Missing original measure {i+1}")
-            break
-            
-        measure_str = original_measures[i + 1]  
+
+    bars_by_index = {bar.get_index_bar(): bar for bar in bars}
+    output = [original_measures[0]]
+
+    for idx, measure_str in enumerate(original_measures[1:], start=1):
+        bar_obj = bars_by_index.get(idx)
+        if bar_obj is None:
+            logger.warning(f"Measure {idx} not parsed, written unchanged")
+            output.append('<measure ' + measure_str)
+            continue
+
+        note_parts = measure_str.split('<note ')
         notes = bar_obj.get_notes()
-        
-        # Split measure into notes
-        note_parts = re.split('<note ', measure_str)
-        
-        # Reconstruct with header intact
-        output += '<measure ' + note_parts[0]  
-        
-        note_index = 0
-        for j in range(1, len(note_parts)):
-            note_str = note_parts[j]
-            
-            # Check if this is a rest (skip coloring)
-            if '<rest' in note_str:
-                output += '<note ' + note_str
-                continue
-            
-            # Get corresponding note object
-            if note_index < len(notes):
-                note_obj = notes[note_index]
-                color = note_obj.get_color()
-                color_code = COLOR_CODES.get(color, COLOR_CODES['black'])
-                
-                # Split at </note> to insert color
-                parts = re.split('</note', note_str)
-                if len(parts) == 2:
-                    # Insert notehead color before </note>
-                    colored = (
-                        parts[0] + 
-                        f'<notehead color={color_code}>normal</notehead>\n\t\t\t\t'
-                        '</note' + parts[1]
-                    )
-                    output += '<note ' + colored
-                else:
-                    output += '<note ' + note_str
-                
-                note_index += 1
-            else:
-                output += '<note ' + note_str
-    
+        if len(note_parts) - 1 != len(notes):
+            logger.warning(f"Measure {idx}: {len(note_parts) - 1} XML notes "
+                           f"vs {len(notes)} parsed notes")
+
+        output.append('<measure ' + note_parts[0])
+        for j, note_str in enumerate(note_parts[1:]):
+            note_obj = notes[j] if j < len(notes) else None
+            output.append('<note ' + _colorize_note(note_str, note_obj))
+
     logger.info("Colored score written successfully")
-    return output
+    return ''.join(output)
+
+
+def _colorize_note(note_str: str, note_obj: Optional[Note]) -> str:
+    """Insert (or update) notehead color. Rests and unmatched notes unchanged."""
+    if note_obj is None or '<rest' in note_str:
+        return note_str
+
+    color_code = COLOR_CODES.get(note_obj.get_color(), COLOR_CODES['black'])
+
+    if '<notehead' in note_str:
+        # Existing notehead: add color attribute if missing
+        return re.sub(r'<notehead(?![^>]*\bcolor=)',
+                      f'<notehead color={color_code}', note_str, count=1)
+
+    # '</note>' (with '>') avoids matching '</notehead>'
+    head, sep, tail = note_str.rpartition('</note>')
+    if not sep:
+        return note_str
+    return f'{head}<notehead color={color_code}>normal</notehead>\n\t\t\t\t</note>{tail}'
 
 
 # ============================================================================

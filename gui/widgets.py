@@ -327,14 +327,14 @@ class ProcessButton(ttk.LabelFrame):
         def worker():
             error = None
             try:
-                analyze_file(filepath, num_strings, tuning)
+                if not analyze_file(filepath, num_strings, tuning):
+                    error = RuntimeError('Analysis failed, see log file for details')
             except Exception as e:
                 error = e
                 logger.error('Analysis failed', exc_info=True)
 
-            # Back to main thread, upload GUI
             self.after(0, lambda: self._on_analysis_finished(error))
-
+            
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_analysis_finished(self, error: Exception | None):

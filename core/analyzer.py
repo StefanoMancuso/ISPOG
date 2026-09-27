@@ -4,7 +4,7 @@ ISPOG - Chord Analyzer
 Professional implementation of guitar chord playability analysis.
 """
 
-from typing import List, Tuple, Optional, Set
+from typing import List, Tuple, Optional, Set, Sequence
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -59,129 +59,97 @@ class ChordAnalyzer:
     MAX_FINGERS = 4
     MAX_FRET_SPAN = 4  # Maximum comfortable stretch
     MAX_FRET_SPAN_WITH_OPEN = 5  # Slightly more with open strings
-    
+
+    # Ordering for choosing the best fingering (lower = better)
+    _RANK = {
+        Playability.PLAYABLE: 0,
+        Playability.DIFFICULT: 1,
+        Playability.UNPLAYABLE: 2,
+    }
+
     def __init__(self):
         logger.debug("ChordAnalyzer initialized")
-    
-    def analyze_chord(self, notes: List[Note]) -> None:
+
+    def analyze_chord(self, new_notes: List[Note],
+                      sustained_notes: Sequence[Note] = ()) -> None:
         """
-        Main entry point: analyzes a chord and sets colors on notes.
+        Analyze notes attacked at the current time.
+        Sustained notes act as fixed constraints (string+fret) and are NOT recolored.
+        Sustained notes already UNPLAYABLE (or without fret) do not constrain.
         
         Args:
-            notes: List of Note objects to analyze
+            new_notes: Notes starting at the current time
+            sustained_notes: Notes still sounding from previous onsets
         """
-        # Remove rests
-        chord_notes = [n for n in notes if n.get_pitch()[0] != 'rest']
-        
-        if not chord_notes:
-            logger.debug("Empty chord (all rests)")
+        attacked = [n for n in new_notes if n.get_pitch()[0] != 'rest']
+        if not attacked:
             return
-        
-        logger.debug(f"Analyzing chord with {len(chord_notes)} notes")
-        
-        # Try to find a playable fingering
-        best_fingering = self._find_best_fingering(chord_notes)
-        
-        # Apply colors based on result
-        self._apply_colors(chord_notes, best_fingering)
-        
-        logger.debug(f"Chord playability: {best_fingering.playability.name}")
-    
-    def _find_best_fingering(self, notes: List[Note]) -> FingeringAnalysis:
+
+        fixed = [
+            FretPosition(*n.get_fret()) for n in sustained_notes
+            if n.get_fret() != (-1, -1)
+            and n.get_color() != Playability.UNPLAYABLE.value
+        ]
+
+        sorted_notes = self._sort_notes_by_pitch(attacked)
+        logger.debug(f"Analyzing {len(sorted_notes)} new notes, {len(fixed)} fixed")
+
+        best = self._find_best_fingering(sorted_notes, fixed)
+        self._apply_colors(sorted_notes, best, offset=len(fixed))
+
+        logger.debug(f"Chord playability: {best.playability.name}")    
+       
+    def _find_best_fingering(self, notes: List[Note],
+                             fixed: List[FretPosition]) -> FingeringAnalysis:
         """
-        Finds the best fingering, trying different positions.
-        Returns most playable option, prioritizing already-assigned frets.
+        Return first PLAYABLE fingering, else the best ranked one.
+        Resulting positions = fixed + new (in this order).
         """
-        sorted_notes = self._sort_notes_by_pitch(notes)
-        
-        # Check if any notes already have assigned frets (from previous analysis)
-        has_prior_assignments = any(n.get_fret() != (-1, -1) for n in sorted_notes)
-        
-        if has_prior_assignments:
-            # Try to respect existing assignments first
-            constrained_fingering = self._try_constrained_fingering(sorted_notes)
-            if constrained_fingering and constrained_fingering.playability != Playability.UNPLAYABLE:
-                return constrained_fingering
-            
-            # If constrained fails, clear assignments and try fresh
-            logger.debug("Prior assignments failed, trying fresh fingerings")
-            for note in sorted_notes:
-                note.set_fret((-1, -1))
-        
-        # Standard algorithm
-        best_result = None
-        best_playability = Playability.UNPLAYABLE
-        
-        for fingering_option in self._generate_fingering_options(sorted_notes):
-            analysis = self._analyze_fingering(fingering_option)
-            
-            if analysis.playability.value == "green":
+        best: Optional[FingeringAnalysis] = None
+
+        for option in self._generate_fingering_options(notes, fixed):
+            analysis = self._analyze_fingering(fixed + option)
+            if analysis.playability is Playability.PLAYABLE:
                 return analysis
-            elif analysis.playability.value == "orange" and best_playability != Playability.PLAYABLE:
-                best_result = analysis
-                best_playability = Playability.DIFFICULT
-            elif best_result is None:
-                best_result = analysis
-        
-        return best_result or FingeringAnalysis(
+            if best is None or self._RANK[analysis.playability] < self._RANK[best.playability]:
+                best = analysis
+
+        return best or FingeringAnalysis(
             playability=Playability.UNPLAYABLE,
             positions=[],
             fingers_used=0,
             has_barre=False,
-            reason="No valid fingering found"
+            reason="No valid fingering found",
         )
-
-    def _try_constrained_fingering(self, notes: List[Note]) -> Optional[FingeringAnalysis]:
-        """
-        Try fingering respecting already-assigned fret positions.
-        Used for notes that were analyzed earlier and are still active.
-        """
-        positions = []
-        
-        for note in notes:
-            assigned_fret = note.get_fret()
-            if assigned_fret != (-1, -1):
-                # Use existing assignment
-                positions.append(FretPosition(string=assigned_fret[0], fret=assigned_fret[1]))
-            else:
-                # No prior assignment - this shouldn't happen in constrained mode
-                return None
-        
-        if not self._has_no_string_conflicts(positions):
-            return None
-        
-        return self._analyze_fingering(positions)
     
-    def _generate_fingering_options(self, notes: List[Note]) -> List[List[FretPosition]]:
+    
+    def _generate_fingering_options(self, notes: List[Note],
+                                    fixed: List[FretPosition]) -> List[List[FretPosition]]:
         """
-        Generates all possible fingering combinations for the chord.
-        Each note can be played on multiple positions.
+        All string assignments for new notes.
+        Strings held by fixed (sustained) notes are excluded.
         """
-        options = []
-        
-        def recurse(index: int, current_fingering: List[FretPosition]):
-            if index == len(notes):
-                # Check basic validity (no string conflicts)
-                if self._has_no_string_conflicts(current_fingering):
-                    options.append(current_fingering.copy())
+        options: List[List[FretPosition]] = []
+        used = {p.string for p in fixed}
+        current: List[FretPosition] = []
+
+        def recurse(i: int) -> None:
+            if i == len(notes):
+                options.append(current.copy())
                 return
-            
-            # Try each possible position for this note
-            for pos_tuple in notes[index].get_fret_pos():
-                pos = FretPosition(string=pos_tuple[0], fret=pos_tuple[1])
-                current_fingering.append(pos)
-                recurse(index + 1, current_fingering)
-                current_fingering.pop()
-        
-        recurse(0, [])
-        
+            for string, fret in notes[i].get_fret_pos():
+                if string in used:
+                    continue
+                used.add(string)
+                current.append(FretPosition(string, fret))
+                recurse(i + 1)
+                current.pop()
+                used.discard(string)
+
+        recurse(0)
         logger.debug(f"Generated {len(options)} fingering options")
         return options
-    
-    def _has_no_string_conflicts(self, positions: List[FretPosition]) -> bool:
-        """Check if two notes are on the same string."""
-        strings = [pos.string for pos in positions]
-        return len(strings) == len(set(strings))
+        
     
     def _analyze_fingering(self, positions: List[FretPosition]) -> FingeringAnalysis:
         """
@@ -383,19 +351,22 @@ class ChordAnalyzer:
         # All good!
         return (Playability.PLAYABLE, "Playable")
     
-    def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis) -> None:
-        """Apply color codes to notes based on analysis."""
+    def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis,
+                      offset: int = 0) -> None:
+        """
+        Apply color and fret to new notes only.
+        analysis.positions[offset:] map 1:1 to notes.
+        """
         color = analysis.playability.value
-        
-        # Set fret positions and colors
+        positions = analysis.positions[offset:]
+
         for i, note in enumerate(notes):
-            if i < len(analysis.positions):
-                pos = analysis.positions[i]
-                note.set_fret((pos.string, pos.fret))
+            pos = positions[i] if i < len(positions) else None
+            note.set_fret((pos.string, pos.fret) if pos else (-1, -1))
             note.set_color(color)
-        
+
         logger.debug(f"Applied color '{color}' to {len(notes)} notes: {analysis.reason}")
-    
+
     def _sort_notes_by_pitch(self, notes: List[Note]) -> List[Note]:
         """
         Sort notes by pitch (highest to lowest).
