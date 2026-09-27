@@ -1,0 +1,3 @@
+*.musicxml
+tests/baseline/
+tests/corpus/
