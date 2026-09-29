@@ -4,7 +4,7 @@ ISPOG - Chord Analyzer
 Professional implementation of guitar chord playability analysis.
 """
 
-from typing import List, Tuple, Optional, Set, Sequence
+from typing import List, Tuple, Optional, Sequence
 from dataclasses import dataclass
 from enum import Enum
 import logging

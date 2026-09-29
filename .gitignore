@@ -1,23 +1,36 @@
-# Python
+# --- Python -----------------------------------------------------------
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
+.ruff_cache/
 
-# Build PyInstaller (gli eseguibili vanno su Hugging Face, non in git)
+# --- secrets ------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- PyInstaller build (executables are published by the release workflow) ---
 build/
 dist/
 *.exe
 
-# Log e output di debug
+# --- runtime output -----------------------------------------------------
 logs/
 *.log
 *_noteList.txt
 
-# Sistema / editor
+# --- test corpus (third-party scores, may be copyrighted; plan F8) ------
+tests/corpus/
+
+# --- generated context for Claude --------------------------------------
+context*.txt
+
+# --- OS / editors -------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
-# Contesto per Claude (generato)
-context*.txt
+.idea/

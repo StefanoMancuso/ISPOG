@@ -6,7 +6,6 @@ Domain entities for music notation and guitar fretboard representation.
 
 import re
 import logging
-from tkinter.messagebox import showinfo
 
 logger = logging.getLogger(__name__)
 

@@ -5,9 +5,7 @@ Main workflow orchestrator for guitar playability analysis.
 This module coordinates the entire analysis pipeline.
 """
 
-import logging
 from pathlib import Path
-from typing import Optional
 
 from utils.logger import get_logger
 from utils.io import load_musicxml
@@ -123,7 +121,7 @@ class PlayabilityAnalyzer:
             logger.info("="*60)
             return True
             
-        except Exception as e:
+        except Exception:
             logger.error("Critical error in analysis workflow", exc_info=True)
             return False
     

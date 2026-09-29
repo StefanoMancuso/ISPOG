@@ -8,7 +8,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
 
 from config.settings import (
     SUPPORTED_FILE_TYPES, TUNING_PRESETS, NOTE_LIST,

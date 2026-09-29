@@ -81,10 +81,11 @@ class MainWindow(tk.Tk):
     
     def set_version(self, version_string: str):
         """
-        Set the version string displayed in the UI.
+        Set the version shown in the window title and under the header.
         
         Args:
             version_string: Version string to display
         """
+        self.title(f'{APP_TITLE} {version_string}')
         self._version.set(f'ver. {version_string}')
         logger.debug(f'Version set to: {version_string}')

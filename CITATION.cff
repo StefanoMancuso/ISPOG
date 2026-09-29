@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it, and preferably the paper, as below."
+type: software
+title: "ISPOG - Is it Playable on Guitar?"
+abstract: >-
+  Checks the playability of MusicXML scores on the guitar: every note is assigned
+  string and fret positions, simultaneous and held notes are fingered together, and
+  the score is returned with noteheads colored as playable, difficult or unplayable.
+authors:
+  - family-names: Mancuso
+    given-names: Stefano
+version: 0.9.1
+date-released: 2026-02-23
+license: GPL-3.0-or-later
+url: "https://ispog.onrender.com"
+repository-code: "https://github.com/StefanoMancuso/ISPOG"
+keywords:
+  - guitar
+  - playability
+  - MusicXML
+  - computer-assisted composition
+  - music informatics
+preferred-citation:
+  type: conference-paper
+  title: "Dealing with a Guitar's Historical Limit through Computer-Assisted Composition"
+  authors:
+    - family-names: Crecchi
+      given-names: Niccolò
+    - family-names: Mancuso
+      given-names: Stefano
+  collection-title: "Sounding the Posthuman: Proceedings of the 25th Colloquium on Music Informatics"
+  conference:
+    name: "25th Colloquium on Music Informatics (CIM 2026)"
+    city: "L'Aquila"
+    country: IT
+    date-start: 2026-10-13
+    date-end: 2026-10-16
+  year: 2026
+  status: in-press

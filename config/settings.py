@@ -4,7 +4,7 @@ ISPOG - Configuration and Constants
 Centralizes all configuration values and presets.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 # ============================================================================
 # APPLICATION SETTINGS

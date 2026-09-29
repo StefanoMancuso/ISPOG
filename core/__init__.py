@@ -11,6 +11,9 @@ from .processor import (
     AnalysisConfig,
 )
 
+# Errors
+from .errors import IspogError, UnsupportedFileError, NoGuitarPartError
+
 # Analyzer
 from .analyzer import ChordAnalyzer
 
@@ -32,7 +35,10 @@ __all__ = [
     'analyze_file',
     'PlayabilityAnalyzer',
     'AnalysisConfig',
-    'main',
+    # Errors
+    'IspogError',
+    'UnsupportedFileError',
+    'NoGuitarPartError',
     # Analyzer
     'ChordAnalyzer',
     # Entities

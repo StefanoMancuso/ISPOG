@@ -8,13 +8,10 @@ import sys
 import traceback
 from tkinter import messagebox
 
+from config.version import __version__
 from gui import MainWindow
 from utils import setup_file_logging, get_logger
 
-# Metadata
-__version__ = '0.9.1'
-__status__ = 'alpha'
-__date__ = '2026-02-23'
 __author__ = 'Stefano Mancuso'
 
 
@@ -24,15 +21,13 @@ def main():
     log_file = setup_file_logging()
     logger = get_logger(__name__)
     
-    version_string = f'{__version__}-{__status__} ({__date__})'
-    
     try:
-        logger.info(f'ISPOG v{version_string} started')
+        logger.info(f'ISPOG {__version__} started')
         logger.info('Initializing GUI...')
         
         # Create main window
         root = MainWindow()
-        root.set_version(version_string)
+        root.set_version(__version__)
         
         logger.info('Starting main loop...')
         root.mainloop()
@@ -58,8 +53,8 @@ def main():
         
         try:
             messagebox.showerror("ISPOG - Critical Error", error_msg)
-        except:
-            logger.error('Could not show error dialog')
+        except Exception:
+            logger.error('Could not show error dialog', exc_info=True)
         
         sys.exit(1)
     

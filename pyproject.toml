@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ispog"
+dynamic = ["version"]
+description = "Is it Playable on Guitar? Checks the guitar playability of MusicXML scores."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Stefano Mancuso" }]
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+keywords = ["guitar", "playability", "MusicXML", "computer-assisted composition"]
+dependencies = [
+    "lxml>=5.3",
+]
+
+[project.optional-dependencies]
+# Web version (app.py, Render). Pin the tested major in F9.
+web = [
+    "gradio>=5",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+    "packaging>=24",        # tests/test_meta.py: PEP 440 check
+]
+# Desktop executables (ISPOG.spec).
+build = [
+    "pyinstaller>=6",
+]
+
+[project.urls]
+Repository = "https://github.com/StefanoMancuso/ISPOG"
+Changelog = "https://github.com/StefanoMancuso/ISPOG/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "config.version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "config*", "utils*", "gui*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Only rules that catch real mistakes (syntax errors, undefined names,
+# unused imports and variables, bare except...), not style.
+select = ["E4", "E7", "E9", "F", "PLE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "web: needs gradio (skipped when not installed)",
+]
