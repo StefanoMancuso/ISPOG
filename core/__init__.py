@@ -17,6 +17,7 @@ from .errors import IspogError, UnsupportedFileError, NoGuitarPartError
 # Reader (lxml)
 from .model import PartInfo
 from .reader import load_score, to_partwise, list_parts, read_part
+from .playability import analyze_notes, ChordEvent, PlayabilityResult
 
 # Analyzer
 from .analyzer import ChordAnalyzer
@@ -49,6 +50,9 @@ __all__ = [
     'to_partwise',
     'list_parts',
     'read_part',
+    'analyze_notes',
+    'ChordEvent',
+    'PlayabilityResult',
     # Analyzer
     'ChordAnalyzer',
     # Entities

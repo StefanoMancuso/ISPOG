@@ -355,6 +355,10 @@ class Note:
     def set_fret(self, fret: tuple[int, int]):
         self._fret = fret
     
+    def set_reason(self, reason: str):
+        """Set by ChordAnalyzer (0.10); kept only for the pre-refactor pipeline."""
+        self._reason = reason
+    
     def __str__(self) -> str:
         return str(self.__dict__)
 

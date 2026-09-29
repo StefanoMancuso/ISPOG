@@ -20,9 +20,22 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   official MusicXML 4.0 stylesheet), multi-part scores with guitar detection, exact onsets
   from `<backup>`, `<forward>`, `<chord/>` and changing `<divisions>`, transposing
   instruments, TAB staves doubling the notation skipped. Not yet used by the analysis.
+- MIDI-based fretboard (`core/fretboard.py`) and playability engine (`core/playability.py`):
+  notes are fingered onset by onset, with the notes still sounding as constraints, for any
+  number of voices. Not yet used by the application.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed
+- Playability engine (effective once the application uses it):
+  - a tied note is no longer analyzed again where the tie ends: it keeps the color of the
+    note that starts the tie and holds its string for the whole tied duration;
+  - positions at the edge of the neck follow the real pitch: no fret beyond the last one;
+    flats on the last fret and altered open strings (e.g. F#1) are found;
+  - voices beyond the fourth are analyzed;
+  - every colored note records why (e.g. "fret span 6 (max 4)", "7 notes on 6 strings",
+    "C2 out of range (below the lowest string E2)").
+- Notes in a chord are ordered by sounding pitch, sharps and flats included (0.9 ignored
+  them): the fingering chosen can change, and with it the constraints on later notes.
 - License: GNU GPL v3.0 or later. Version 0.9.1 remains under the terms it was
   released with.
 - Bundled resources, logs and reports are located from the project folder, no longer

@@ -5,11 +5,12 @@ Professional implementation of guitar chord playability analysis.
 """
 
 from typing import List, Tuple, Optional, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import logging
 
-from .entities import Note
+from .fretboard import Fretboard, note_name_to_midi
+from .model import Note
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,25 @@ class FingeringAnalysis:
     barre_fret: Optional[int] = None
     span: int = 0  # Fret span (max - min fret, excluding open strings)
     reason: str = ""  # Why unplayable/difficult
+    fixed: List[FretPosition] = field(default_factory=list)  # held notes, first in positions
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+def _pitch_name(note: Note) -> str:
+    """Display name; the 0.9 Note (core.entities, removed in F4) has no pitch_name."""
+    return getattr(note, 'pitch_name', None) or note.get_pitch()[0]
+
+
+def _midi(note: Note) -> int:
+    """Sounding pitch; derived from get_pitch() for the 0.9 Note (removed in F4)."""
+    midi = getattr(note, 'midi', None)
+    if midi is not None:
+        return midi
+    name, alter = note.get_pitch()
+    return note_name_to_midi(name) + round(float(alter))
 
 
 class ChordAnalyzer:
@@ -67,11 +87,17 @@ class ChordAnalyzer:
         Playability.UNPLAYABLE: 2,
     }
 
-    def __init__(self):
+    def __init__(self, fretboard: Optional[Fretboard] = None):
+        """
+        Args:
+            fretboard: used only to explain why a note has no position
+                (``below the lowest string``, ``above fret 19``).
+        """
+        self._fretboard = fretboard
         logger.debug("ChordAnalyzer initialized")
 
     def analyze_chord(self, new_notes: List[Note],
-                      sustained_notes: Sequence[Note] = ()) -> None:
+                      sustained_notes: Sequence[Note] = ()) -> Optional[FingeringAnalysis]:
         """
         Analyze notes attacked at the current time.
         Sustained notes act as fixed constraints (string+fret) and are NOT recolored.
@@ -80,27 +106,33 @@ class ChordAnalyzer:
         Args:
             new_notes: Notes starting at the current time
             sustained_notes: Notes still sounding from previous onsets
+
+        Returns:
+            The chosen fingering (``fixed`` = held notes), or None without attacked notes.
         """
         attacked = [n for n in new_notes if n.get_pitch()[0] != 'rest']
         if not attacked:
-            return
+            return None
 
-        fixed = [
-            FretPosition(*n.get_fret()) for n in sustained_notes
+        held = [
+            n for n in sustained_notes
             if n.get_fret() != (-1, -1)
             and n.get_color() != Playability.UNPLAYABLE.value
         ]
+        fixed = [FretPosition(*n.get_fret()) for n in held]
 
         sorted_notes = self._sort_notes_by_pitch(attacked)
         logger.debug(f"Analyzing {len(sorted_notes)} new notes, {len(fixed)} fixed")
 
-        best = self._find_best_fingering(sorted_notes, fixed)
+        best = self._find_best_fingering(sorted_notes, fixed, held)
+        best.fixed = fixed
         self._apply_colors(sorted_notes, best, offset=len(fixed))
 
-        logger.debug(f"Chord playability: {best.playability.name}")    
-       
-    def _find_best_fingering(self, notes: List[Note],
-                             fixed: List[FretPosition]) -> FingeringAnalysis:
+        logger.debug(f"Chord playability: {best.playability.name}")
+        return best
+
+    def _find_best_fingering(self, notes: List[Note], fixed: List[FretPosition],
+                             held: Sequence[Note] = ()) -> FingeringAnalysis:
         """
         Return first PLAYABLE fingering, else the best ranked one.
         Resulting positions = fixed + new (in this order).
@@ -119,8 +151,36 @@ class ChordAnalyzer:
             positions=[],
             fingers_used=0,
             has_barre=False,
-            reason="No valid fingering found",
+            reason=self._explain_no_fingering(notes, fixed, held),
         )
+
+    def _explain_no_fingering(self, notes: List[Note], fixed: List[FretPosition],
+                              held: Sequence[Note]) -> str:
+        """Why no string assignment exists for the attacked notes."""
+        unreachable = [n for n in notes if not n.get_fret_pos()]
+        if unreachable:
+            return '; '.join(self._out_of_range(n) for n in unreachable)
+
+        if self._fretboard is not None:
+            strings = self._fretboard.num_strings
+        else:
+            strings = len({s for n in notes for s, _ in n.get_fret_pos()}
+                          | {p.string for p in fixed})
+        if len(notes) + len(fixed) > strings:
+            held_text = f" + {_count(len(fixed), 'held note')}" if fixed else ''
+            return f"{_count(len(notes), 'note')}{held_text} on {strings} strings"
+
+        if fixed:
+            held_list = ', '.join(f'{_pitch_name(n)} ({p.string}/{p.fret})'
+                                  for n, p in zip(held, fixed))
+            return f"string conflict with held notes: {held_list}"
+        return "string conflict: " + ' '.join(_pitch_name(n) for n in notes)
+
+    def _out_of_range(self, note: Note) -> str:
+        if self._fretboard is None:
+            return f"{_pitch_name(note)} out of range"
+        detail = self._fretboard.out_of_range_reason(_midi(note))
+        return f"{_pitch_name(note)} out of range ({detail})"
     
     
     def _generate_fingering_options(self, notes: List[Note],
@@ -178,7 +238,7 @@ class ChordAnalyzer:
                 fingers_used=0,
                 has_barre=False,
                 span=0,
-                reason="All open strings"
+                reason="open strings"
             )
         
         # Check for barré
@@ -246,6 +306,7 @@ class ChordAnalyzer:
                 'has_barre': True,
                 'fret': min_fret,
                 'type': 'index',
+                'strings': strings,
                 'notes_count': len(strings)
             }
         
@@ -270,6 +331,7 @@ class ChordAnalyzer:
                     'has_barre': True,
                     'fret': max_fret,
                     'type': 'pinky',
+                    'strings': strings,
                     'notes_count': len(strings)
                 }
             else:
@@ -323,7 +385,7 @@ class ChordAnalyzer:
         if fingers_needed > self.MAX_FINGERS:
             return (
                 Playability.UNPLAYABLE,
-                f"Requires {fingers_needed} fingers (max 4)"
+                f"requires {fingers_needed} fingers (max {self.MAX_FINGERS})"
             )
         
         # Rule 2 & 3: Span too large
@@ -331,25 +393,26 @@ class ChordAnalyzer:
         if span > max_span:
             return (
                 Playability.UNPLAYABLE,
-                f"Fret span {span} too large (max {max_span})"
+                f"fret span {span} (max {max_span})"
             )
         
         # Rule 4: Pinky barré (difficult)
         if barre_info.get('type') == 'pinky':
+            strings = barre_info['strings']
             return (
                 Playability.DIFFICULT,
-                "Requires pinky barré (difficult)"
+                f"pinky barré on fret {barre_info['fret']}, strings {strings[0]}–{strings[-1]}"
             )
         
         # Rule 5: Maximum comfortable span
         if span == self.MAX_FRET_SPAN and not has_open_strings:
             return (
                 Playability.DIFFICULT,
-                "Maximum fret span (stretchy)"
+                f"maximum stretch (span {span})"
             )
         
         # All good!
-        return (Playability.PLAYABLE, "Playable")
+        return (Playability.PLAYABLE, "playable")
     
     def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis,
                       offset: int = 0) -> None:
@@ -364,37 +427,13 @@ class ChordAnalyzer:
             pos = positions[i] if i < len(positions) else None
             note.set_fret((pos.string, pos.fret) if pos else (-1, -1))
             note.set_color(color)
+            note.set_reason(analysis.reason)
 
         logger.debug(f"Applied color '{color}' to {len(notes)} notes: {analysis.reason}")
 
     def _sort_notes_by_pitch(self, notes: List[Note]) -> List[Note]:
         """
-        Sort notes by pitch (highest to lowest).
-        Uses bubble sort for simplicity (lists are small).
+        Sort notes by sounding pitch, highest first. The sort is stable: notes with the
+        same pitch keep their order.
         """
-        sorted_notes = notes.copy()
-        
-        for i in range(len(sorted_notes)):
-            for j in range(len(sorted_notes) - 1):
-                pitch1 = sorted_notes[j].get_pitch()[0]
-                pitch2 = sorted_notes[j + 1].get_pitch()[0]
-                
-                # Compare octave first
-                octave1 = int(pitch1[-1])
-                octave2 = int(pitch2[-1])
-                
-                if octave1 < octave2:
-                    sorted_notes[j], sorted_notes[j + 1] = sorted_notes[j + 1], sorted_notes[j]
-                elif octave1 == octave2:
-                    # Same octave, compare note name
-                    note_order = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
-                    note1 = pitch1[0]
-                    note2 = pitch2[0]
-                    
-                    if note_order.index(note1) < note_order.index(note2):
-                        sorted_notes[j], sorted_notes[j + 1] = sorted_notes[j + 1], sorted_notes[j]
-        
-        return sorted_notes
-
-
-
+        return sorted(notes, key=_midi, reverse=True)
