@@ -15,6 +15,11 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 - Test suite scaffolding: metadata and architecture checks (`tests/test_meta.py`),
   synthetic MusicXML builder, pre-refactor baseline of `Test01`.
 - Typed errors for the core (`core/errors.py`).
+- MusicXML reader based on lxml (`core/reader.py`, `core/model.py`): `.musicxml`, `.xml`
+  and `.mxl` recognized from the content, UTF-16 files, timewise scores (converted with the
+  official MusicXML 4.0 stylesheet), multi-part scores with guitar detection, exact onsets
+  from `<backup>`, `<forward>`, `<chord/>` and changing `<divisions>`, transposing
+  instruments, TAB staves doubling the notation skipped. Not yet used by the analysis.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed

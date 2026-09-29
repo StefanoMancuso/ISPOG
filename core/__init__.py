@@ -14,6 +14,10 @@ from .processor import (
 # Errors
 from .errors import IspogError, UnsupportedFileError, NoGuitarPartError
 
+# Reader (lxml)
+from .model import PartInfo
+from .reader import load_score, to_partwise, list_parts, read_part
+
 # Analyzer
 from .analyzer import ChordAnalyzer
 
@@ -39,6 +43,12 @@ __all__ = [
     'IspogError',
     'UnsupportedFileError',
     'NoGuitarPartError',
+    # Reader
+    'PartInfo',
+    'load_score',
+    'to_partwise',
+    'list_parts',
+    'read_part',
     # Analyzer
     'ChordAnalyzer',
     # Entities

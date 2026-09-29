@@ -14,7 +14,15 @@ each under its own license.
 | [PyInstaller](https://pyinstaller.org/) bootloader | desktop executables | GPL-2.0-or-later with bootloader exception |
 | [Gradio](https://www.gradio.app/) | web version only, not in the executables | Apache-2.0 |
 
-Files from the MusicXML specification (`resources/timepart.xsl`, `tests/schema/*.xsd`)
-will be listed here, with their license, when they are added.
+## MusicXML 4.0 specification files
+
+| File | Used for |
+|---|---|
+| `resources/timepart.xsl` | converting timewise scores to partwise |
+
+Unmodified from MusicXML 4.0 (<https://github.com/w3c/musicxml>, tag `v4.0`).
+Copyright © 2004-2021 the Contributors to the MusicXML Specification, published by the
+W3C Music Notation Community Group under the
+[W3C Community Final Specification Agreement (FSA)](https://www.w3.org/community/about/agreements/final/).
 
 The license texts are available at the links above and in each package's distribution.
