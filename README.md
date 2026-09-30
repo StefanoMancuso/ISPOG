@@ -51,6 +51,10 @@ pytest
 
 GitHub runs the same checks at every push to `main`.
 
+Real scores from many editors go in `tests/corpus/` (not versioned: they may be
+copyrighted). `pytest -m corpus -v` checks them; `python tests/tools/corpus_run.py` writes
+the analyzed scores and reports to `tests/corpus/_output/` for a visual check.
+
 ## Versioning
 
 [PEP 440](https://peps.python.org/pep-0440/): `0.10.0b1` is the first beta of 0.10.0.

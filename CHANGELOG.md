@@ -48,6 +48,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   or dropped on the program icon on Windows, is loaded at start-up.
 - `.xml` files can be opened.
 - Output validated against the MusicXML 4.0 schema in the test suite.
+- Corpus tests for real scores from many editors (`tests/test_corpus.py`) and a tool that
+  analyzes the whole corpus for a visual check (`tests/tools/corpus_run.py`).
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed

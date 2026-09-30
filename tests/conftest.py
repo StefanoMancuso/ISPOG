@@ -16,6 +16,7 @@ Example::
 from __future__ import annotations
 
 import io
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -28,6 +29,23 @@ TESTS_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = TESTS_DIR / "fixtures"
 BASELINE_DIR = TESTS_DIR / "baseline"
 SCHEMA_DIR = TESTS_DIR / "schema"
+
+# Real scores from many editors (plan, F8). Not versioned: they may be copyrighted.
+# ISPOG_CORPUS points the corpus tests and tools at another folder.
+CORPUS_DIR = Path(os.environ.get("ISPOG_CORPUS") or TESTS_DIR / "corpus")
+CORPUS_OUTPUT = "_output"                      # written by tests/tools/corpus_run.py
+SCORE_SUFFIXES = frozenset({".musicxml", ".xml", ".mxl"})
+
+
+def corpus_files() -> list[Path]:
+    """Scores in the corpus folder and its subfolders, except the tool output."""
+    if not CORPUS_DIR.is_dir():
+        return []
+    return sorted(
+        path for path in CORPUS_DIR.rglob("*")
+        if path.is_file() and path.suffix.lower() in SCORE_SUFFIXES
+        and CORPUS_OUTPUT not in path.relative_to(CORPUS_DIR).parts
+    )
 
 DOCTYPE_PARTWISE = (
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" '

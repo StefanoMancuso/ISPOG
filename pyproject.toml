@@ -62,4 +62,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "web: needs gradio (skipped when not installed)",
+    "corpus: real scores in tests/corpus (skipped when the folder is empty)",
 ]
