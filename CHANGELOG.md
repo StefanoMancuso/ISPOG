@@ -23,6 +23,11 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 - MIDI-based fretboard (`core/fretboard.py`) and playability engine (`core/playability.py`):
   notes are fingered onset by onset, with the notes still sounding as constraints, for any
   number of voices. Not yet used by the application.
+- MusicXML writer (`core/writer.py`): noteheads colored in place, schema-valid; credit
+  "Analyzed by ISPOG <version>" at the bottom of page 1, replacing earlier ISPOG credits;
+  single-part copies of a score; UTF-8 output keeping the original DOCTYPE and layout.
+  Not yet used by the application.
+- Output validated against the MusicXML 4.0 schema in the test suite.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed
@@ -40,6 +45,16 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   released with.
 - Bundled resources, logs and reports are located from the project folder, no longer
   from the folder ISPOG is launched from.
+
+### Fixed
+- `.mxl` files exported by MuseScore 4 (score stored as `score.xml`) were rejected with
+  "No .musicxml file found in .mxl archive".
+- The "Analyzed by ISPOG" credit was never written (0.9 defined it but did not call it);
+  the new writer adds it with the version.
+- Colored scores were not valid MusicXML: colors were written in lower-case hex (the schema
+  requires upper case) and, when a note had no notehead, the new `<notehead>` was placed
+  after `<notations>`. Colors are now upper case; the placement is fixed by the new writer.
+- Analyzing an already analyzed score kept the old colors; the new writer overwrites them.
 
 ### Removed
 - macOS build at every push to `main` (it ran without tests). Executables will be built

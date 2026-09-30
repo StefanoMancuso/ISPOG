@@ -348,6 +348,7 @@ def _container(full_path: str, media_type: str = "") -> bytes:
 
 @pytest.mark.parametrize("container, target", [
     pytest.param(_container("score.musicxml"), "score.musicxml", id="container"),
+    pytest.param(_container("score.xml"), "score.xml", id="musescore-4"),
     pytest.param(_container("a/score.xml", "application/vnd.recordare.musicxml+xml"),
                  "a/score.xml", id="xml-with-media-type"),
     pytest.param(None, "score.xml", id="no-container"),

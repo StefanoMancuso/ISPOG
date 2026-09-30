@@ -11,16 +11,7 @@ from typing import Tuple, Dict, List, Optional
 from .entities import Note, Bar, NewNote
 from .analyzer import ChordAnalyzer
 
-# Import color codes
-try:
-    from config.settings import COLOR_CODES
-except ImportError:
-    COLOR_CODES = {
-        'red': '"#cf0000"',
-        'green': '"#005000"',
-        'orange': '"#ff8c00"',
-        'black': '"#000000"'
-    }
+from config.settings import COLOR_CODES
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +266,7 @@ def _colorize_note(note_str: str, note_obj: Optional[Note]) -> str:
     if note_obj is None or '<rest' in note_str:
         return note_str
 
-    color_code = COLOR_CODES.get(note_obj.get_color(), COLOR_CODES['black'])
+    color_code = f'"{COLOR_CODES.get(note_obj.get_color(), COLOR_CODES["black"])}"'
 
     if '<notehead' in note_str:
         # Existing notehead: add color attribute if missing

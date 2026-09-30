@@ -1,70 +1,66 @@
 # -*- coding: utf-8 -*-
 """
 ISPOG - Core Package
-Contains the core business logic and processing workflow.
-"""
+MusicXML reading, playability analysis and writing. No GUI dependency (plan, D6).
 
-# Processor
-from .processor import (
-    analyze_file,
-    PlayabilityAnalyzer,
-    AnalysisConfig,
-)
+    tree = load_score(path)
+    for part in list_parts(tree):
+        if part.is_guitar:
+            notes = read_part(part)
+            analyze_notes(notes, Fretboard(tuning, num_frets))
+            colorize(notes)
+    add_ispog_credit(tree)
+    data = serialize(tree)
+"""
 
 # Errors
 from .errors import IspogError, UnsupportedFileError, NoGuitarPartError
 
-# Reader (lxml)
-from .model import PartInfo
+# Model
+from .model import Note, PartInfo
+
+# Reader
 from .reader import load_score, to_partwise, list_parts, read_part
+
+# Analysis
+from .fretboard import Fretboard, note_name_to_midi
+from .analyzer import ChordAnalyzer
 from .playability import analyze_notes, ChordEvent, PlayabilityResult
 
-# Analyzer
-from .analyzer import ChordAnalyzer
+# Writer
+from .writer import colorize, set_notehead_color, add_ispog_credit, extract_part, serialize
 
-# Entities
-from .entities import Note, Bar, Fretboard, NewNote
-
-# MusicXML processing
-from .musicxml import (
-    parse_measures,
-    merge_bars_to_score,
-    analyze_score_playability,
-    write_colored_score,
-    add_ispog_credit,
-    create_debug_note_list,
-)
+# 0.9 pipeline, still used by the GUI; replaced in F5 (processor) and F6 (GUI)
+from .processor import analyze_file, PlayabilityAnalyzer, AnalysisConfig
 
 __all__ = [
-    # Processor
-    'analyze_file',
-    'PlayabilityAnalyzer',
-    'AnalysisConfig',
     # Errors
     'IspogError',
     'UnsupportedFileError',
     'NoGuitarPartError',
-    # Reader
+    # Model
+    'Note',
     'PartInfo',
+    # Reader
     'load_score',
     'to_partwise',
     'list_parts',
     'read_part',
+    # Analysis
+    'Fretboard',
+    'note_name_to_midi',
+    'ChordAnalyzer',
     'analyze_notes',
     'ChordEvent',
     'PlayabilityResult',
-    # Analyzer
-    'ChordAnalyzer',
-    # Entities
-    'Note',
-    'Bar',
-    'Fretboard',
-    'NewNote',
-    # MusicXML
-    'parse_measures',
-    'merge_bars_to_score',
-    'analyze_score_playability',
-    'write_colored_score',
+    # Writer
+    'colorize',
+    'set_notehead_color',
     'add_ispog_credit',
-    'create_debug_note_list'
+    'extract_part',
+    'serialize',
+    # 0.9 pipeline
+    'analyze_file',
+    'PlayabilityAnalyzer',
+    'AnalysisConfig',
 ]

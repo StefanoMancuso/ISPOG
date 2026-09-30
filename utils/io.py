@@ -106,26 +106,28 @@ def _load_compressed_mxl(file_path: str) -> str:
     with zipfile.ZipFile(file_path, 'r') as zip_file:
         musicxml_file = None
 
-        # The main file is usually referenced in META-INF/container.xml
+        # The main file is referenced in META-INF/container.xml; MuseScore names it
+        # score.xml, other editors <title>.musicxml
         try:
             container = zip_file.read('META-INF/container.xml').decode('utf-8')
-            match = re.search(r'full-path="([^"]+\.musicxml)"', container)
+            match = re.search(r'full-path="([^"]+\.(?:musicxml|xml))"', container)
             if match:
                 musicxml_file = match.group(1)
                 logger.debug(f"Found main file in container: {musicxml_file}")
         except KeyError:
-            logger.warning("No container.xml found, searching for .musicxml")
+            logger.warning("No container.xml found, searching for a score file")
 
-        # Fallback: first .musicxml file in the archive
+        # Fallback: first .musicxml or .xml file outside META-INF/
         if not musicxml_file:
             for name in zip_file.namelist():
-                if name.endswith('.musicxml'):
+                if (name.lower().endswith(('.musicxml', '.xml'))
+                        and not name.startswith('META-INF/')):
                     musicxml_file = name
-                    logger.debug(f"Using first .musicxml found: {musicxml_file}")
+                    logger.debug(f"Using first score file found: {musicxml_file}")
                     break
 
         if not musicxml_file:
-            raise ValueError("No .musicxml file found in .mxl archive")
+            raise ValueError("No MusicXML score found in .mxl archive")
 
         content = zip_file.read(musicxml_file).decode('utf-8')
         logger.info(f"Successfully decompressed {len(content)} characters")

@@ -100,12 +100,12 @@ NOTE_COLORS = {
     'default': 'black',
 }
 
-# Color codes for MusicXML
+# Notehead colors written to MusicXML. The schema requires upper-case hex (#RRGGBB).
 COLOR_CODES = {
-    'red': '"#cf0000"',
-    'green': '"#005000"',
-    'orange': '"#ff8c00"',
-    'black': '"#000000"'
+    'red': '#CF0000',
+    'green': '#005000',
+    'orange': '#FF8C00',
+    'black': '#000000',
 }
 
 # ============================================================================

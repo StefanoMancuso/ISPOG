@@ -15,16 +15,19 @@ Example::
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 from xml.sax.saxutils import escape, quoteattr
 
 import pytest
+from lxml import etree
 
 TESTS_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = TESTS_DIR / "fixtures"
 BASELINE_DIR = TESTS_DIR / "baseline"
+SCHEMA_DIR = TESTS_DIR / "schema"
 
 DOCTYPE_PARTWISE = (
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" '
@@ -50,6 +53,41 @@ def test01_path() -> Path:
 def test_poli_path() -> Path:
     """Four-part score: P1, P2 not guitar; P3, P4 classical guitars."""
     return FIXTURES_DIR / "test_poli.musicxml"
+
+
+# ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+
+class _LocalSchemaResolver(etree.Resolver):
+    """Serve the schema imports (xml.xsd, xlink.xsd) from tests/schema, never the network."""
+
+    def resolve(self, url, pubid, context):
+        local = SCHEMA_DIR / url.rsplit("/", 1)[-1]
+        return self.resolve_filename(str(local), context) if local.is_file() else None
+
+
+@pytest.fixture(scope="session")
+def musicxml_schema() -> etree.XMLSchema:
+    """MusicXML 4.0 XSD (tests/schema, see THIRD_PARTY_NOTICES.md)."""
+    parser = etree.XMLParser(no_network=True, load_dtd=False, resolve_entities=False)
+    parser.resolvers.add(_LocalSchemaResolver())
+    return etree.XMLSchema(etree.parse(str(SCHEMA_DIR / "musicxml.xsd"), parser))
+
+
+@pytest.fixture(scope="session")
+def assert_valid(musicxml_schema) -> Callable[[bytes], None]:
+    """Assert that serialized MusicXML validates against the 4.0 schema."""
+
+    def _check(data: bytes) -> None:
+        parser = etree.XMLParser(no_network=True, load_dtd=False, resolve_entities=False)
+        tree = etree.parse(io.BytesIO(data), parser)
+        if not musicxml_schema.validate(tree):
+            errors = "\n".join(f"  line {e.line}: {e.message}"
+                               for e in list(musicxml_schema.error_log)[:10])
+            pytest.fail(f"MusicXML 4.0 schema violations:\n{errors}")
+
+    return _check
 
 
 # ---------------------------------------------------------------------------
