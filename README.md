@@ -35,7 +35,7 @@ Requires Python 3.11+.
 ```bash
 python -m venv venv
 # Windows: venv\Scripts\activate    macOS/Linux: source venv/bin/activate
-pip install -e ".[dev]"          # core, desktop app, pytest, ruff
+pip install -e ".[dev]"          # core, desktop app (with drag and drop), pytest, ruff
 pip install -e ".[dev,web]"      # + web version (Gradio)
 python main.py                   # desktop app
 ```

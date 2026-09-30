@@ -12,8 +12,16 @@ from typing import Dict, List
 
 APP_TITLE = "ISPOG"
 APP_FULL_NAME = "Is it Playable on Guitar?"
-WINDOW_SIZE = "400x420"  
-WINDOW_RESIZABLE = True
+WINDOW_RESIZABLE = False       # the window takes the size of its content (gui/main_window.py)
+MAX_NAME_CHARS = 34            # longer file names are shortened with an ellipsis
+
+REPOSITORY_URL = "https://github.com/StefanoMancuso/ISPOG"
+LICENSE_NAME = "GNU GPL v3.0 or later"
+PAPER_CITATION = (
+    "Crecchi N., Mancuso S. (2026). Dealing with a Guitar's Historical Limit through "
+    "Computer-Assisted Composition. Proceedings of the 25th Colloquium on Music "
+    "Informatics (CIM 2026), L'Aquila."
+)
 
 # ============================================================================
 # GUITAR CONFIGURATION
@@ -22,6 +30,8 @@ WINDOW_RESIZABLE = True
 # Default values
 DEFAULT_NUM_STRINGS = 6
 DEFAULT_NUM_FRETS = 19
+MIN_FRETS = 12
+MAX_FRETS = 24
 MIN_STRINGS = 4
 MAX_STRINGS = 8
 
@@ -109,6 +119,8 @@ COLOR_CODES = {
 
 UI_TEXT = {
     'no_file_loaded': 'No file loaded',
+    'no_file_drop': 'No file loaded: browse or drop a score',
+    'drop_active': 'Release to load the score',
     'file_loaded': 'File loaded. Ready!',
     'file_error': 'File Error',
     'no_file_selected': 'No file was loaded',
@@ -121,6 +133,15 @@ UI_TEXT = {
     'saved': 'Saved:\n{score}\n{report}',
     'part_summary': '{name}: {total} notes · {orange} difficult · {red} unplayable{where}',
     'part_summary_where': ' (m. {measures})',
+    'parts_found': '{guitars} of {total} parts are guitars',
+    'no_guitar_found': 'No guitar found: select the parts',
+    'no_parts_selected': 'Select at least one part to analyze',
+    'choose_folder': 'Choose a folder for the separate parts',
+    'overwrite_title': 'Replace files?',
+    'overwrite': 'These files already exist and will be replaced:\n{files}',
+    'about_title': 'About ISPOG',
+    'about': ('{name}\nVersion {version}\n\n© 2026 Stefano Mancuso\nLicense: {license}\n'
+              '{repository}\n\nIf you use ISPOG in research, please cite:\n{citation}'),
 }
 
 # Playability report (core/report.py)

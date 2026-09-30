@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Desktop app extras: drag and drop of scores onto the window (optional at runtime).
+desktop = [
+    "tkinterdnd2>=0.4",
+]
 # Web version (app.py, Render). Pin the tested major in F9.
 web = [
     "gradio>=5",
@@ -25,10 +29,12 @@ dev = [
     "pytest>=8",
     "ruff>=0.5",
     "packaging>=24",        # tests/test_meta.py: PEP 440 check
+    "tkinterdnd2>=0.4",     # same as desktop: the window tests cover drag and drop
 ]
 # Desktop executables (ISPOG.spec).
 build = [
     "pyinstaller>=6",
+    "tkinterdnd2>=0.4",
 ]
 
 [project.urls]

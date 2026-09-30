@@ -31,3 +31,10 @@ def ask_save_file(default_name: str, initial_dir: Path) -> Optional[Path]:
         filetypes=(('MusicXML', '*.musicxml'), ('All files', '*.*')),
     )
     return Path(path) if path else None
+
+
+def ask_output_dir(initial_dir: Path) -> Optional[Path]:
+    """Folder for the separate parts, or None if cancelled."""
+    path = filedialog.askdirectory(title=UI_TEXT['choose_folder'], initialdir=initial_dir,
+                                   mustexist=True)
+    return Path(path) if path else None

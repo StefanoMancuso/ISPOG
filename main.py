@@ -2,10 +2,16 @@
 """
 ISPOG - Is it Playable on Guitar?
 Main entry point for the application.
+
+    python main.py [score]
+
+A score given on the command line is loaded at start-up: this is also what happens when a
+file is dropped on the program icon or opened with "Open with" (Windows).
 """
 
 import sys
 import traceback
+from pathlib import Path
 from tkinter import messagebox
 
 from config.version import __version__
@@ -28,6 +34,10 @@ def main():
         # Create main window
         root = MainWindow()
         root.set_version(__version__)
+        if len(sys.argv) > 1:
+            score = Path(sys.argv[1])
+            logger.info(f'Score from the command line: {score}')
+            root.after_idle(root.file_selector.load, score)
         
         logger.info('Starting main loop...')
         root.mainloop()

@@ -35,8 +35,17 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 - Summary after the analysis: notes, difficult and unplayable per part, with the measures
   containing unplayable notes.
 - Technical note list per part (`logs/<name>_<part>_notes.tsv`), for bug reports.
-- Multi-part scores: guitar parts are detected and analyzed; the other parts are left
-  untouched (part selection in the window comes in a later beta).
+- Multi-part scores: every part is listed when the score is loaded, guitars are selected;
+  any part can be selected (e.g. a banjo, with its tuning set as Custom). Parts not
+  selected are left untouched.
+- Output as one full score or as separate parts (one file per part, in a folder), with
+  a confirmation before replacing existing files.
+- Options "Add labels to score" and "Number of frets" (12–24, default 19).
+- Help menu: "About ISPOG" (version, license, repository, how to cite) and "Open log
+  folder".
+- Drag and drop: a score dropped anywhere on the window is loaded (needs the optional
+  `tkinterdnd2`; without it the Browse button remains). A score passed on the command line,
+  or dropped on the program icon on Windows, is loaded at start-up.
 - `.xml` files can be opened.
 - Output validated against the MusicXML 4.0 schema in the test suite.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
@@ -47,6 +56,10 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 - The save dialog opens after the analysis, from the main window; cancelling it no
   longer loses the analysis silently. The analysis thread no longer touches the window.
 - Error messages say what is wrong with the file instead of "Analysis failed".
+- A score is read as soon as it is chosen: an unreadable file is reported right away.
+- Compact fixed-size window, sized to its content (about 320×540 on Linux, smaller with
+  the Windows fonts): tuning in two columns of four strings, number of strings and frets
+  on one row; during the analysis a progress bar takes the place of the button.
 - Playability engine:
   - a tied note is no longer analyzed again where the tie ends: it keeps the color of the
     note that starts the tie and holds its string for the whole tied duration;

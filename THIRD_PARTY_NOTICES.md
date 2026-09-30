@@ -12,6 +12,8 @@ each under its own license.
 | [libxml2](https://gitlab.gnome.org/GNOME/libxml2) | XML engine, bundled with lxml | MIT |
 | [libxslt](https://gitlab.gnome.org/GNOME/libxslt) | XSLT engine, bundled with lxml | MIT |
 | [PyInstaller](https://pyinstaller.org/) bootloader | desktop executables | GPL-2.0-or-later with bootloader exception |
+| [tkinterdnd2](https://github.com/Eliav2/tkinterdnd2) | drag and drop in the desktop app | MIT |
+| [tkDnD](https://github.com/petasis/tkdnd) | native drag and drop library, bundled with tkinterdnd2 | Tcl/Tk-style BSD license |
 | [Gradio](https://www.gradio.app/) | web version only, not in the executables | Apache-2.0 |
 
 ## MusicXML 4.0 specification files

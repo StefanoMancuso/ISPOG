@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
+from config.settings import MAX_FRETS, MAX_STRINGS, MIN_FRETS, MIN_STRINGS
+
 from .errors import NoGuitarPartError
 from .fretboard import Fretboard
 from .model import AnalysisResult, PartInfo, PartReport
@@ -28,8 +30,6 @@ from .writer import (add_ispog_credit, annotate, colorize, extract_part,
 logger = logging.getLogger(__name__)
 
 OUTPUT_MODES = ('full', 'split')
-MIN_STRINGS, MAX_STRINGS = 4, 8
-MIN_FRETS, MAX_FRETS = 12, 24
 
 
 @dataclass(frozen=True)
