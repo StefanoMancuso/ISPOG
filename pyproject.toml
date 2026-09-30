@@ -23,9 +23,9 @@ desktop = [
     "tkinterdnd2>=0.4",
     "certifi>=2024",
 ]
-# Web version (app.py, Render). Pin the tested major in F9.
+# Web version (app.py, render.yaml): the Gradio major the app is tested with.
 web = [
-    "gradio>=5",
+    "gradio>=6,<7",
 ]
 dev = [
     "pytest>=8",

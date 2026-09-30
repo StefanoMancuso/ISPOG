@@ -1,0 +1,14 @@
+# ISPOG web version on Render (plan, F9). Python version: .python-version (3.12, latest patch).
+# Deploys only from release tags, through the deploy hook called by release.yml (F7).
+services:
+  - type: web
+    name: ispog
+    runtime: python
+    plan: free
+    buildCommand: pip install -e ".[web]"      # -e: resources are found from the sources
+    startCommand: python app.py
+    healthCheckPath: /
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GRADIO_ANALYTICS_ENABLED
+        value: "False"

@@ -114,6 +114,13 @@ def test_core_does_not_import_tkinter():
     assert _run_python(probe, PROJECT_ROOT) == "False", "importing core loads Tkinter or gui"
 
 
+def test_desktop_does_not_import_the_web_app():
+    # the executables exclude gradio (ISPOG.spec): the desktop app must not need it
+    probe = ("import sys, core, gui, gui.widgets; "
+             "print('gradio' in sys.modules or 'app' in sys.modules)")
+    assert _run_python(probe, PROJECT_ROOT) == "False", "the desktop app loads gradio or app.py"
+
+
 def test_paths_do_not_depend_on_working_directory(tmp_path):
     probe = (
         "import json; from utils.io import resource_path, writable_path; "

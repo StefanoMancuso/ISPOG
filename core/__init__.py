@@ -6,6 +6,7 @@ MusicXML reading, playability analysis and writing. No GUI dependency (plan, D6)
     result = analyze(AnalysisConfig('score.mxl', tuning=('E4', 'B3', 'G3', 'D3', 'A2', 'E2')))
     score_bytes = result.outputs['full']
     report_text = render_report(result)
+    names = output_names(result)            # default file names, same keys as outputs
 
 Building blocks: load_score → list_parts → read_part → analyze_notes → colorize /
 annotate → add_ispog_credit → serialize.
@@ -31,8 +32,10 @@ from .writer import (colorize, set_notehead_color, annotate, remove_annotations,
 
 # Processor and reports
 from .model import PartReport, AnalysisResult
-from .processor import AnalysisConfig, analyze, select_targets, write_notes_logs
-from .report import render_report, render_notes_tsv
+from .processor import (AnalysisConfig, analyze, select_targets, preselected_part_ids,
+                        write_notes_logs)
+from .report import render_report, render_summary, render_notes_tsv
+from .naming import output_names, report_name
 
 __all__ = [
     # Errors
@@ -68,7 +71,11 @@ __all__ = [
     'AnalysisConfig',
     'analyze',
     'select_targets',
+    'preselected_part_ids',
     'write_notes_logs',
     'render_report',
+    'render_summary',
     'render_notes_tsv',
+    'output_names',
+    'report_name',
 ]

@@ -47,6 +47,7 @@ python -m venv venv
 pip install -e ".[dev]"          # core, desktop app (with drag and drop), pytest, ruff
 pip install -e ".[dev,web]"      # + web version (Gradio)
 python main.py                   # desktop app
+python app.py                    # web version, http://127.0.0.1:7860
 ```
 
 Always install with `-e`: resources and logs are located from the source folder.
@@ -58,7 +59,8 @@ ruff check .
 pytest
 ```
 
-GitHub runs the same checks at every push to `main`.
+GitHub runs the same checks at every push to `main`. Web tests (`tests/test_web.py`) run only
+where Gradio is installed: `pytest -m web`.
 
 Real scores from many editors go in `tests/corpus/` (not versioned: they may be
 copyrighted). `pytest -m corpus -v` checks them; `python tests/tools/corpus_run.py` writes

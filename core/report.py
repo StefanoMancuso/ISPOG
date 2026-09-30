@@ -42,6 +42,24 @@ def render_report(result: AnalysisResult, now: Optional[datetime] = None) -> str
     return '\n'.join(lines) + '\n'
 
 
+def render_summary(report: PartReport, max_measures: int = 8) -> str:
+    """
+    One line for the end-of-analysis message:
+    ``Guitar: 120 notes · 3 difficult · 1 unplayable (m. 12)``.
+    """
+    counts = report.counts
+    red_measures = report.red_measures
+    where = ''
+    if red_measures:
+        shown = ', '.join(red_measures[:max_measures])
+        if len(red_measures) > max_measures:
+            shown += ' …'
+        where = T['short_summary_where'].format(measures=shown)
+    total = counts['green'] + counts['orange'] + counts['red']
+    return T['short_summary'].format(name=report.name, total=total, orange=counts['orange'],
+                                     red=counts['red'], where=where)
+
+
 def _part_section(report: PartReport) -> list[str]:
     counts = report.counts
     analyzed = counts['green'] + counts['orange'] + counts['red']

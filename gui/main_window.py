@@ -13,12 +13,11 @@ from typing import Optional
 from config import (APP_FULL_NAME, APP_TITLE, LICENSE_NAME, PAPER_CITATION, REPOSITORY_URL,
                     UI_TEXT, WINDOW_RESIZABLE)
 from config.version import __version__
-from core import IspogError, list_parts, load_score, render_report
+from core import IspogError, list_parts, load_score, output_names, render_report, report_name
 from core.bugreport import ReportContent
 from utils import get_logger, log_dir
 from utils.logger import current_log_file
 from .dialogs import open_folder
-from .outputs import OUTPUT_SUFFIX
 from .report_dialog import ReportDialog
 from .widgets import FileSelectorWidget, PartSelectorWidget, ProcessButton, TuningWidget
 
@@ -155,11 +154,9 @@ class MainWindow(tk.Tk):
         current: Optional[str] = self.file_selector.get_filepath()
         if config is None or result is None or current is None or config.filepath != Path(current):
             return {}
-        stem = config.filepath.stem
-        files = {(f'{stem}{OUTPUT_SUFFIX}.musicxml' if key == 'full'
-                  else f'{stem}_{key}{OUTPUT_SUFFIX}.musicxml'): data
-                 for key, data in result.outputs.items()}
-        files[f'{stem}{OUTPUT_SUFFIX}_report.txt'] = render_report(result).encode('utf-8')
+        names = output_names(result)
+        files = {names[key]: data for key, data in result.outputs.items()}
+        files[report_name(result)] = render_report(result).encode('utf-8')
         return files
 
     def set_version(self, version_string: str):

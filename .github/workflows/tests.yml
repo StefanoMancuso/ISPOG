@@ -47,5 +47,15 @@ jobs:
       - name: Test
         run: pytest -v
 
-  # The "web" job (pip install ".[dev,web]" + pytest -m web) is added in F9,
-  # together with app.py and tests/test_web.py.
+  web:                               # every run: the web version (app.py) with Gradio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - name: Install the project
+        run: pip install -e ".[dev,web]"
+      - name: Test
+        run: pytest -v -m web

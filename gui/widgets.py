@@ -18,14 +18,15 @@ from config.settings import (
     DEFAULT_NUM_FRETS, DEFAULT_NUM_STRINGS, MAX_FRETS, MAX_NAME_CHARS, MAX_STRINGS,
     MIN_FRETS, MIN_STRINGS, NOTE_LIST, STANDARD_TUNING_INDICES, TUNING_PRESETS, UI_TEXT
 )
-from core import (AnalysisConfig, AnalysisResult, IspogError, PartInfo, PartReport, analyze,
-                  render_report, write_notes_logs)
+from core import (AnalysisConfig, AnalysisResult, IspogError, PartInfo, analyze, output_names,
+                  preselected_part_ids, render_report, render_summary, report_name,
+                  write_notes_logs)
+from core.naming import report_path_for
 from utils.io import log_dir
 from utils.logger import current_log_file, get_logger
+from utils.text import shorten
 from .dialogs import ask_open_file, ask_output_dir, ask_save_file
 from .dnd import enable_file_drop
-from .outputs import (full_output_name, preselected_part_ids, report_path_for, shorten,
-                      split_output_names, split_report_name)
 
 logger = get_logger(__name__)
 
@@ -401,18 +402,17 @@ class ProcessButton(ttk.Frame):
                 outcome.put((None, e))
 
         threading.Thread(target=worker, daemon=True).start()
-        self._poll(config, parts, outcome)
+        self._poll(config, outcome)
 
-    def _poll(self, config: AnalysisConfig, parts: list[PartInfo], outcome: queue.Queue) -> None:
+    def _poll(self, config: AnalysisConfig, outcome: queue.Queue) -> None:
         try:
             result, error = outcome.get_nowait()
         except queue.Empty:
-            self.after(self.POLL_MS, self._poll, config, parts, outcome)
+            self.after(self.POLL_MS, self._poll, config, outcome)
             return
-        self._on_analysis_finished(config, parts, result, error)
+        self._on_analysis_finished(config, result, error)
 
-    def _on_analysis_finished(self, config: AnalysisConfig, parts: list[PartInfo],
-                              result: Optional[AnalysisResult],
+    def _on_analysis_finished(self, config: AnalysisConfig, result: Optional[AnalysisResult],
                               error: Optional[Exception]) -> None:
         """Tk thread: stop the progress bar, then save the outputs or show the error."""
         self._set_busy(False)
@@ -426,14 +426,14 @@ class ProcessButton(ttk.Frame):
             return
         self.last_config, self.last_result = config, result
         if config.output_mode == 'split':
-            self._save_split(config, parts, result)
+            self._save_split(config, result)
         else:
             self._save_full(config, result)
         logger.info('=== Analysis finished ===')
 
     def _save_full(self, config: AnalysisConfig, result: AnalysisResult) -> None:
         source = config.filepath
-        target = ask_save_file(full_output_name(source), source.parent)
+        target = ask_save_file(output_names(result)['full'], source.parent)
         if target is None:
             logger.info('Save cancelled by user')
             return
@@ -441,16 +441,15 @@ class ProcessButton(ttk.Frame):
         if self._write({target: result.outputs['full']}, report, result):
             self._show_summary(result, [target.name], report.name)
 
-    def _save_split(self, config: AnalysisConfig, parts: list[PartInfo],
-                    result: AnalysisResult) -> None:
+    def _save_split(self, config: AnalysisConfig, result: AnalysisResult) -> None:
         source = config.filepath
         folder = ask_output_dir(source.parent)
         if folder is None:
             logger.info('Save cancelled by user')
             return
-        names = split_output_names(source, parts)
-        files = {folder / names[pid]: data for pid, data in result.outputs.items()}
-        report = folder / split_report_name(source)
+        names = output_names(result)
+        files = {folder / names[key]: data for key, data in result.outputs.items()}
+        report = folder / report_name(result)
         existing = [p.name for p in [*files, report] if p.exists()]
         if existing and not messagebox.askyesno(
                 title=UI_TEXT['overwrite_title'],
@@ -474,22 +473,9 @@ class ProcessButton(ttk.Frame):
         return True
 
     def _show_summary(self, result: AnalysisResult, scores: list[str], report: str) -> None:
-        summary = '\n'.join(self._part_summary(r) for r in result.reports)
+        summary = '\n'.join(render_summary(r) for r in result.reports)
         saved = UI_TEXT['saved'].format(score='\n'.join(scores), report=report)
         messagebox.showinfo(title=UI_TEXT['complete'], message=f'{summary}\n\n{saved}')
-
-    @staticmethod
-    def _part_summary(report: PartReport) -> str:
-        counts = report.counts
-        red_measures = report.red_measures
-        where = ''
-        if red_measures:
-            shown = ', '.join(red_measures[:8]) + (' …' if len(red_measures) > 8 else '')
-            where = UI_TEXT['part_summary_where'].format(measures=shown)
-        total = counts['green'] + counts['orange'] + counts['red']
-        return UI_TEXT['part_summary'].format(name=report.name, total=total,
-                                              orange=counts['orange'], red=counts['red'],
-                                              where=where)
 
     @staticmethod
     def _error_message(error: Exception) -> str:

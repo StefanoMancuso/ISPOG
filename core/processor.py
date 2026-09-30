@@ -107,7 +107,8 @@ def analyze(config: AnalysisConfig) -> AnalysisResult:
         outputs = {part.part_id: serialize(extract_part(tree, part.part_id)) for part in targets}
 
     return AnalysisResult(source_name=config.filepath.name, tuning=config.tuning,
-                          num_frets=config.num_frets, outputs=outputs, reports=reports)
+                          num_frets=config.num_frets, outputs=outputs, reports=reports,
+                          output_mode=config.output_mode)
 
 
 def select_targets(parts: list[PartInfo], part_ids: Optional[Sequence[str]],
@@ -136,6 +137,17 @@ def select_targets(parts: list[PartInfo], part_ids: Optional[Sequence[str]],
         raise NoGuitarPartError(
             f"No guitar part found in '{source_name}'. Select the parts to analyze.")
     return targets
+
+
+def preselected_part_ids(parts: Sequence[PartInfo]) -> list[str]:
+    """
+    Parts ticked when a score is loaded, in the desktop and web apps: those ``analyze``
+    would choose by itself (the guitars, or the only part of the score); none otherwise.
+    """
+    try:
+        return [p.part_id for p in select_targets(list(parts), None)]
+    except NoGuitarPartError:
+        return []
 
 
 def write_notes_logs(result: AnalysisResult, directory: Path) -> list[Path]:

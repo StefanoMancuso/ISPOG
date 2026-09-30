@@ -55,9 +55,16 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 - Output validated against the MusicXML 4.0 schema in the test suite.
 - Corpus tests for real scores from many editors (`tests/test_corpus.py`) and a tool that
   analyzes the whole corpus for a visual check (`tests/tools/corpus_run.py`).
+- Web version on the same code as the desktop app (`app.py`, Gradio 6, `render.yaml`):
+  part selection, tunings including Custom, number of frets, full score or separate parts,
+  labels; the same files and report as the desktop app, the report also shown on the page.
+  Uploaded scores and results are deleted within an hour.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed
+- Web version: it no longer has its own, older copy of the analysis, and gets the fixes of
+  the desktop app (held notes, rests shifting the colors). It is deployed only with a
+  release, at the same version as the desktop app. Python 3.12.
 - The analysis runs on the new reader, engine and writer; the 0.9 string-based pipeline
   is removed.
 - The save dialog opens after the analysis, from the main window; cancelling it no

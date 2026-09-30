@@ -1,28 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-ISPOG - Output naming and part preselection
-Decisions of the desktop app that need no window, kept apart from Tkinter so they can be
-tested anywhere.
+ISPOG - Output names
+Names of the files an analysis produces, shared by the desktop app and the web app so that
+both deliver the same files:
+
+    piece.mxl, full   →  piece_ispog.musicxml               + piece_ispog_report.txt
+    piece.mxl, split  →  piece_<part name>_ispog.musicxml … + piece_ispog_report.txt
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Protocol
 
-from core import NoGuitarPartError, PartInfo, select_targets
+from .model import AnalysisResult
 
 OUTPUT_SUFFIX = '_ispog'
 _UNSAFE = re.compile(r'[^\w\-]+')
 
 
-def preselected_part_ids(parts: Sequence[PartInfo]) -> list[str]:
-    """Parts ticked when a score is loaded: the guitars, or the only part of the score."""
-    try:
-        return [p.part_id for p in select_targets(list(parts), None)]
-    except NoGuitarPartError:
-        return []
+class _NamedPart(Protocol):
+    """PartInfo or PartReport: anything with a part id and a name."""
+
+    part_id: str
+    name: str
 
 
 def safe_name(text: str) -> str:
@@ -40,7 +42,7 @@ def report_path_for(score: Path) -> Path:
     return score.with_name(f'{score.stem}_report.txt')
 
 
-def split_output_names(source: Path, parts: Iterable[PartInfo]) -> dict[str, str]:
+def split_output_names(source: Path, parts: Iterable[_NamedPart]) -> dict[str, str]:
     """
     One file per part: ``<score>_<part name>_ispog.musicxml``. Parts with the same name
     (e.g. two "Guitar") are told apart by their id.
@@ -59,10 +61,15 @@ def split_report_name(source: Path) -> str:
     return f'{source.stem}{OUTPUT_SUFFIX}_report.txt'
 
 
-def shorten(text: str, max_chars: int) -> str:
-    """``text`` cut in the middle with an ellipsis if longer than ``max_chars``."""
-    if len(text) <= max_chars:
-        return text
-    head = (max_chars - 1) // 2
-    tail = max_chars - 1 - head
-    return f'{text[:head]}…{text[len(text) - tail:]}'
+def output_names(result: AnalysisResult) -> dict[str, str]:
+    """Default file name of every output of ``result`` (same keys as ``result.outputs``)."""
+    source = Path(result.source_name)
+    if result.output_mode == 'full':
+        return {'full': full_output_name(source)}
+    names = split_output_names(source, result.reports)
+    return {key: names[key] for key in result.outputs}
+
+
+def report_name(result: AnalysisResult) -> str:
+    """Default name of the report of ``result``."""
+    return split_report_name(Path(result.source_name))

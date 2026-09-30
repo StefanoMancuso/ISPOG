@@ -9,7 +9,8 @@ from lxml import etree
 
 from conftest import BASELINE_DIR, TESTS_DIR, PartSpec, attributes, make_score, note
 from core.errors import NoGuitarPartError, UnsupportedFileError
-from core.processor import AnalysisConfig, analyze, select_targets, write_notes_logs
+from core.processor import (AnalysisConfig, analyze, preselected_part_ids, select_targets,
+                            write_notes_logs)
 from core.reader import list_parts, load_score
 from core.writer import CREDIT_ID, LABEL_ID_PREFIX
 
@@ -91,6 +92,13 @@ def test_unknown_part_id(write_score):
         select_targets(parts, ("P7",))
 
 
+def test_preselection_follows_the_automatic_choice(write_score, test_poli_path):
+    assert preselected_part_ids(list_parts(load_score(test_poli_path))) == ["P3", "P4"]
+    assert preselected_part_ids(_parts(write_score, [_spec("P1", False)])) == ["P1"]
+    assert preselected_part_ids(_parts(write_score, [_spec("P1", False),
+                                                     _spec("P2", False)])) == []
+
+
 def test_no_guitar(write_score):
     path = write_score(make_score(parts=[_spec("P1", False), _spec("P2", False)]), "duo.xml")
     with pytest.raises(NoGuitarPartError, match="duo.xml"):
@@ -130,6 +138,7 @@ def test_full_output_changes_only_the_guitars(poli_full, test_poli_path, assert_
 
 def test_split_output(test_poli_path, assert_valid):
     result = analyze(_config(test_poli_path, output_mode="split"))
+    assert result.output_mode == "split"
     assert list(result.outputs) == ["P3", "P4"]
     for pid, data in result.outputs.items():
         assert_valid(data)

@@ -131,8 +131,6 @@ UI_TEXT = {
     'unexpected_error': 'Unexpected error: {error}\n\nDetails are in the log file:\n{log}',
     'save_title': 'Save analyzed score',
     'saved': 'Saved:\n{score}\n{report}',
-    'part_summary': '{name}: {total} notes · {orange} difficult · {red} unplayable{where}',
-    'part_summary_where': ' (m. {measures})',
     'parts_found': '{guitars} of {total} parts are guitars',
     'no_guitar_found': 'No guitar found: select the parts',
     'no_parts_selected': 'Select at least one part to analyze',
@@ -180,6 +178,9 @@ REPORT_TEXT = {
     'no_problems': 'No difficult or unplayable passages.',
     'not_analyzed': 'Not analyzed',
     'not_analyzed_item': 'm. {measure}, beat {beat} — {pitch}: {reason}',
+    # One line per part in the end-of-analysis message (desktop dialog, web page)
+    'short_summary': '{name}: {total} notes · {orange} difficult · {red} unplayable{where}',
+    'short_summary_where': ' (m. {measures})',
 }
 
 # Short labels written above difficult and unplayable points in the score
@@ -208,6 +209,45 @@ BUGREPORT_EMAIL = "stefanomancuso88@gmail.com"
 BUGREPORT_MAX_BYTES = 15 * 1024 * 1024       # zip size; the script refuses larger ones
 BUGREPORT_MAX_LOG_BYTES = 2 * 1024 * 1024    # only the end of a longer log is sent
 BUGREPORT_TIMEOUT = 60                       # seconds
+
+# ============================================================================
+# WEB APP (app.py, render.yaml)
+# ============================================================================
+
+WEB_DEFAULT_PORT = 7860             # local runs; on Render the PORT variable decides
+WEB_MAX_FILE_SIZE = '10mb'          # uploads above this size are refused by Gradio
+WEB_FILE_MAX_AGE = 3600             # seconds: uploads and results are deleted after this
+WEB_QUEUE_SIZE = 16                 # analyses waiting; further requests are turned away
+WEB_SHOW_REPOSITORY = False         # link to the sources in the footer (public repository)
+
+WEB_TEXT = {
+    'title': 'ISPOG — Is it Playable on Guitar?',
+    'intro': ('Upload a MusicXML score to check which notes and chords can be played on the '
+              'guitar. Notes are colored in the score: **green** playable, **orange** '
+              'difficult, **red** unplayable, black not analyzed.'),
+    'score': 'Score (.musicxml, .mxl, .xml)',
+    'parts': 'Parts to analyze',
+    'output': 'Output',
+    'output_full': 'Full score',
+    'output_split': 'Separate parts',
+    'labels': 'Add labels to score',
+    'tuning': 'Tuning',
+    'custom': 'Custom',
+    'strings': 'Strings',
+    'string': 'String {number}',
+    'frets': 'Frets',
+    'analyze': 'Analyze Playability',
+    'results': 'Colored score and report',
+    'report': 'Report',
+    'summary_title': '**Analysis complete**',
+    'unexpected_error': 'Unexpected error. The analysis could not be completed.',
+    'privacy': ('Scores are analyzed on the server only to produce the results shown here: '
+                'uploaded files and results are deleted within an hour and are not shared. '
+                'On the free server the first analysis after a pause can take up to a minute.'),
+    'footer': 'ISPOG {version} · {license}',
+    'footer_repository': '[Source code]({url})',
+    'cite': 'Please cite: {citation}',
+}
 
 # ============================================================================
 # LOGGING

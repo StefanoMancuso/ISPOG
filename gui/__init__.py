@@ -2,8 +2,7 @@
 """
 GUI package for ISPOG.
 
-Widgets are imported on first use, so that modules without Tkinter (``gui.outputs``) can
-be imported, and tested, where Tkinter is not installed.
+Widgets are imported on first use: importing the package does not need Tkinter.
 """
 
 __all__ = ['MainWindow', 'FileSelectorWidget', 'TuningWidget', 'PartSelectorWidget',

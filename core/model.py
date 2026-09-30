@@ -256,3 +256,4 @@ class AnalysisResult:
     num_frets: int
     outputs: dict[str, bytes] = field(repr=False)
     reports: list[PartReport]
+    output_mode: str = 'full'                  # 'full' or 'split' (AnalysisConfig)

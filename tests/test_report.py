@@ -7,7 +7,7 @@ from datetime import datetime
 from config.version import __version__
 from conftest import attributes, make_score, note
 from core.processor import AnalysisConfig, analyze
-from core.report import render_notes_tsv, render_report
+from core.report import render_notes_tsv, render_report, render_summary
 
 STANDARD = ("E4", "B3", "G3", "D3", "A2", "E2")
 NOW = datetime(2026, 9, 30, 7, 45)
@@ -69,3 +69,25 @@ def test_notes_tsv(test01_path):
     assert lines[0] == "measure\tbeat\tonset\tpitch\tmidi\tvoice\tstaff\tstring/fret\tcolor\treason"
     assert lines[1] == "1\t1\t0\trest\t\t1\t1\t\tblack\t"
     assert lines[2] == "1\t2\t1\tE2\t40\t1\t1\t6/0\tgreen\tplayable"
+
+
+# ---------------------------------------------------------------------------
+# One-line summary (end-of-analysis message, desktop and web)
+# ---------------------------------------------------------------------------
+
+def test_summary_line(test01_path, test_poli_path):
+    report = analyze(AnalysisConfig(test01_path, tuning=STANDARD)).reports[0]
+    assert render_summary(report) == (
+        "Chitarra classica: 44 notes · 0 difficult · 8 unplayable (m. 1)")
+    poli = analyze(AnalysisConfig(test_poli_path, tuning=STANDARD)).reports[0]
+    assert render_summary(poli).endswith("0 unplayable")
+
+
+def test_summary_line_lists_at_most_max_measures(write_score):
+    # seven notes at once: more than six strings, unplayable in every measure
+    chord = "".join(note(step, 3, 4, chord=i > 0) for i, step in enumerate("CDEFGAB"))
+    path = write_score(make_score(measures=[attributes() + chord] + [chord] * 3))
+    report = analyze(AnalysisConfig(path, tuning=STANDARD)).reports[0]
+    assert report.red_measures == ["1", "2", "3", "4"]
+    assert render_summary(report, max_measures=2).endswith("(m. 1, 2 …)")
+    assert render_summary(report, max_measures=4).endswith("(m. 1, 2, 3, 4)")
