@@ -59,9 +59,17 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   part selection, tunings including Custom, number of frets, full score or separate parts,
   labels; the same files and report as the desktop app, the report also shown on the page.
   Uploaded scores and results are deleted within an hour.
+- Executables for Windows, macOS Apple Silicon and macOS Intel, built and published from
+  version tags by the release workflow (GitHub release, Hugging Face, web deploy). Each
+  executable is checked with `ISPOG --self-test` before it is published.
+- macOS: a score dropped on the ISPOG icon (Finder or Dock) or opened with ISPOG is loaded,
+  also while ISPOG is running.
+- `scripts/release.py`: prepares the release commit and the next development version.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed
+- Windows executable: no UPX compression (fewer antivirus false alarms), with version
+  information in the file properties.
 - Web version: it no longer has its own, older copy of the analysis, and gets the fixes of
   the desktop app (held notes, rests shifting the colors). It is deployed only with a
   release, at the same version as the desktop app. Python 3.12.

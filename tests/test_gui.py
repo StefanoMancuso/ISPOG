@@ -96,6 +96,15 @@ def test_loading_a_score_lists_its_parts(app, test_poli_path):
     assert selector.status_text.get() == "2 of 4 parts are guitars"
 
 
+def test_files_opened_from_the_system_are_loaded(app, test01_path, test_poli_path):
+    # macOS: a score dropped on the app icon arrives through ::tk::mac::OpenDocument
+    window, _ = app
+    window.open_documents(str(test_poli_path), str(test01_path))
+    assert window.file_selector.get_filepath() == str(test_poli_path)
+    window.open_documents()
+    assert window.file_selector.get_filepath() == str(test_poli_path)
+
+
 def test_unreadable_file_is_refused_at_loading(app, tmp_path, test_poli_path):
     window, stubs = app
     _load(window, stubs, test_poli_path)

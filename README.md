@@ -19,9 +19,26 @@ parser, analyzes multi-part scores and adds a readable report. See the
 - Desktop (Windows, macOS): <https://huggingface.co/StefanoMancuso88/ISPOG>
 - Web version: <https://ispog.onrender.com>
 
-Builds are not digitally signed: the first launch needs one extra confirmation
-(Windows: "More info" → "Run anyway"; macOS: System Settings → Privacy & Security →
-"Open Anyway").
+| System | File |
+|---|---|
+| Windows 10/11 | `ISPOG-<version>-windows.exe` |
+| macOS, Apple Silicon (M1 and later) | `ISPOG-<version>-macos-arm64.zip` |
+| macOS, Intel | `ISPOG-<version>-macos-x86_64.zip` |
+
+Beta versions are in the `beta` folder. No installation and no Python needed: on Windows
+run the `.exe`; on macOS unzip and move `ISPOG.app` to Applications.
+
+### First launch
+
+The executables are not digitally signed, so the system asks for one extra confirmation
+the first time:
+
+- **Windows** (SmartScreen, "Windows protected your PC"): "More info" → "Run anyway".
+- **macOS** ("ISPOG can't be opened" or "Apple could not verify…"): close the message, open
+  System Settings → Privacy & Security, scroll down, "Open Anyway", then confirm.
+
+A score can be opened with the Browse button, dropped on the window, or dropped on the
+ISPOG icon (the program file on Windows, the app or its Dock icon on macOS).
 
 ## Input
 
@@ -71,6 +88,20 @@ the analyzed scores and reports to `tests/corpus/_output/` for a visual check.
 [PEP 440](https://peps.python.org/pep-0440/): `0.10.0b1` is the first beta of 0.10.0.
 The version lives in one place, `config/version.py`; between releases it carries a
 `.devN` suffix. Every analyzed score records the ISPOG version that produced it.
+
+### Releasing
+
+```bash
+python scripts/release.py prepare 0.10.0b1     # version, CHANGELOG and CITATION for the release
+ruff check . && pytest                         # commit "Release 0.10.0b1", push
+git tag -a v0.10.0b1 -m "Beta 1" && git push origin v0.10.0b1
+python scripts/release.py start-dev 0.10.0b2   # commit "Start 0.10.0b2 development"
+```
+
+The tag starts `.github/workflows/release.yml`: tests, executables for Windows and macOS
+(each checked with `ISPOG --self-test` before publishing), GitHub release, upload to
+Hugging Face, deploy of the web version. Secrets: `HF_TOKEN`, `RENDER_DEPLOY_HOOK`.
+To build locally: `pip install -e ".[build]"`, then `pyinstaller --noconfirm ISPOG.spec`.
 
 ## Related publications
 

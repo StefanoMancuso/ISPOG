@@ -1,0 +1,159 @@
+# Release: push a tag v<version> (e.g. v0.10.0b1) on the release commit (plan, F7).
+# check → tests → build (Windows, macOS arm64, macOS Intel, each self-tested)
+#       → GitHub release, Hugging Face upload, web deploy on Render.
+# Dry run: Actions → release → "Run workflow": tests and builds the executables of the
+# current commit (downloadable from the run page for 7 days) and publishes nothing.
+# Secrets: HF_TOKEN (Hugging Face, write), RENDER_DEPLOY_HOOK (Render deploy hook URL).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash                      # -eo pipefail: a failing command before | tee fails
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:                             # the tag is the version of the commit, a release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - id: check
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            python scripts/release.py check "$GITHUB_REF_NAME" | tee -a "$GITHUB_OUTPUT"
+          else
+            python scripts/release.py version | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  tests:
+    needs: check
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: [check, tests]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-14
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      ARTIFACT: ISPOG-${{ needs.check.outputs.version }}-${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - name: Install the project and PyInstaller
+        run: pip install -e ".[build]"
+      - name: Build
+        run: pyinstaller --noconfirm ISPOG.spec
+
+      # The executable must start and pass its self-test (gui/selftest.py), or nothing is published
+      - name: Self-test (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $report = Join-Path $PWD 'selftest.json'
+          $process = Start-Process dist/ISPOG.exe -ArgumentList '--self-test', "`"$report`"" -Wait -PassThru
+          Get-Content $report -ErrorAction SilentlyContinue
+          exit $process.ExitCode
+      - name: Self-test (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        run: |
+          status=0
+          dist/ISPOG.app/Contents/MacOS/ISPOG --self-test "$PWD/selftest.json" > /dev/null || status=$?
+          cat selftest.json || true
+          exit $status
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: cp dist/ISPOG.exe "$ARTIFACT.exe"
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist/ISPOG.app "$ARTIFACT.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ env.ARTIFACT }}.*
+          if-no-files-found: error
+          retention-days: 7
+
+  github-release:
+    if: github.event_name == 'push'
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: python3 scripts/release.py notes "${{ needs.check.outputs.version }}" > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ISPOG ${{ needs.check.outputs.version }}
+          body_path: notes.md
+          prerelease: ${{ needs.check.outputs.prerelease == 'true' }}
+          files: dist/*
+          fail_on_unmatched_files: true
+
+  huggingface:                       # public download page
+    if: github.event_name == 'push'
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: pip install "huggingface_hub>=0.30"
+      - name: Upload the executables
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python scripts/release.py upload-hf dist "${{ needs.check.outputs.version }}"
+
+  deploy-web:                        # Render: auto-deploy is off, the web follows the releases
+    if: github.event_name == 'push'
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy the tagged commit
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          case "$HOOK" in *\?*) separator='&' ;; *) separator='?' ;; esac
+          curl -fsS -X POST "${HOOK}${separator}ref=${GITHUB_SHA}" > /dev/null
+          echo "Deploy of ${GITHUB_SHA} requested"

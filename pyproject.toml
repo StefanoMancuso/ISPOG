@@ -33,9 +33,11 @@ dev = [
     "packaging>=24",        # tests/test_meta.py: PEP 440 check
     "tkinterdnd2>=0.4",     # same as desktop: the window tests cover drag and drop
 ]
-# Desktop executables (ISPOG.spec).
+# Desktop executables (ISPOG.spec, release.yml). The hooks package collects the tkDnD
+# library of tkinterdnd2 (hook added in 2025).
 build = [
-    "pyinstaller>=6",
+    "pyinstaller>=6.10",
+    "pyinstaller-hooks-contrib>=2025.1",
     "tkinterdnd2>=0.4",
     "certifi>=2024",
 ]

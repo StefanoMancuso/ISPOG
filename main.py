@@ -4,9 +4,14 @@ ISPOG - Is it Playable on Guitar?
 Main entry point for the application.
 
     python main.py [score]
+    python main.py --self-test [report.json]
 
 A score given on the command line is loaded at start-up: this is also what happens when a
-file is dropped on the program icon or opened with "Open with" (Windows).
+file is dropped on the program icon or opened with "Open with" (Windows). On macOS the
+Finder sends the file as an event instead (see ``MainWindow``).
+
+``--self-test`` checks the installation without showing a window (``gui/selftest.py``);
+the release workflow runs it on every executable.
 """
 
 import sys
@@ -15,19 +20,36 @@ from pathlib import Path
 from tkinter import messagebox
 
 from config.version import __version__
-from gui import MainWindow
 from utils import setup_file_logging, get_logger
+
+SELF_TEST = '--self-test'
 
 __author__ = 'Stefano Mancuso'
 
 
+def self_test(args: list[str]) -> int:
+    """Exit code of the self-test; never raises (a windowed executable would show a dialog)."""
+    try:
+        setup_file_logging()
+        from gui.selftest import run_self_test
+        return run_self_test(Path(args[0]) if args else None)
+    except BaseException:
+        traceback.print_exc()
+        return 1
+
+
 def main():
     """Initialize and run the application."""
+    if sys.argv[1:2] == [SELF_TEST]:
+        sys.exit(self_test(sys.argv[2:]))
+
     # Setup logging first
     log_file = setup_file_logging()
     logger = get_logger(__name__)
     
     try:
+        from gui import MainWindow
+
         logger.info(f'ISPOG {__version__} started')
         logger.info('Initializing GUI...')
         

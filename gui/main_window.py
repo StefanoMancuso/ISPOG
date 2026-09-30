@@ -4,6 +4,7 @@ ISPOG - Main Window
 Main application window that assembles all widgets.
 """
 
+import sys
 import tkinter as tk
 import traceback
 from pathlib import Path
@@ -48,6 +49,11 @@ class MainWindow(tk.Tk):
         self._create_header()
         self._create_widgets()
         self._fit_to_content()
+
+        if sys.platform == 'darwin':
+            # Finder sends a score dropped on the app icon, or opened with ISPOG, as an
+            # Apple event, both at launch and while running; Tk passes it to this command.
+            self.createcommand('::tk::mac::OpenDocument', self.open_documents)
 
         logger.info('Main window initialized successfully')
 
@@ -95,6 +101,12 @@ class MainWindow(tk.Tk):
         """
         self.update_idletasks()
         self.geometry(f'{self.winfo_reqwidth()}x{self.winfo_reqheight()}')
+
+    def open_documents(self, *paths: str) -> None:
+        """Files opened from the system (macOS Finder): the first one is loaded."""
+        if paths:
+            logger.info(f'Opened from the system: {", ".join(paths)}')
+            self.file_selector.load(Path(paths[0]))
 
     def _on_file_loaded(self, path: Path) -> bool:
         """Read the score and list its parts; show why if it cannot be used."""
