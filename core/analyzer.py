@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import logging
 
-from .fretboard import Fretboard, note_name_to_midi
+from .fretboard import Fretboard
 from .model import Note
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,18 @@ class Playability(Enum):
     PLAYABLE = "green"
     DIFFICULT = "orange"  # Requires pinky barré or stretch
     UNPLAYABLE = "red"
+
+
+class Issue:
+    """Machine-readable cause of a result, for short labels (``reason`` is the long text)."""
+    NONE = ""
+    FINGERS = "fingers"            # more than 4 fingers
+    SPAN = "span"                  # fret span too large
+    OUT_OF_RANGE = "out_of_range"  # a note has no position on the neck
+    STRINGS = "strings"            # more notes than strings
+    CONFLICT = "conflict"          # no string assignment (held notes or shared strings)
+    PINKY_BARRE = "pinky_barre"
+    STRETCH = "stretch"            # maximum comfortable span
 
 
 @dataclass
@@ -46,25 +58,13 @@ class FingeringAnalysis:
     barre_fret: Optional[int] = None
     span: int = 0  # Fret span (max - min fret, excluding open strings)
     reason: str = ""  # Why unplayable/difficult
+    issue: str = Issue.NONE  # machine-readable cause, see Issue
     fixed: List[FretPosition] = field(default_factory=list)  # held notes, first in positions
+    held: List[Note] = field(default_factory=list)  # the notes behind ``fixed``
 
 
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}{'' if n == 1 else 's'}"
-
-
-def _pitch_name(note: Note) -> str:
-    """Display name; the 0.9 Note (core.entities, removed in F4) has no pitch_name."""
-    return getattr(note, 'pitch_name', None) or note.get_pitch()[0]
-
-
-def _midi(note: Note) -> int:
-    """Sounding pitch; derived from get_pitch() for the 0.9 Note (removed in F4)."""
-    midi = getattr(note, 'midi', None)
-    if midi is not None:
-        return midi
-    name, alter = note.get_pitch()
-    return note_name_to_midi(name) + round(float(alter))
 
 
 class ChordAnalyzer:
@@ -110,7 +110,7 @@ class ChordAnalyzer:
         Returns:
             The chosen fingering (``fixed`` = held notes), or None without attacked notes.
         """
-        attacked = [n for n in new_notes if n.get_pitch()[0] != 'rest']
+        attacked = [n for n in new_notes if n.midi is not None]
         if not attacked:
             return None
 
@@ -126,6 +126,7 @@ class ChordAnalyzer:
 
         best = self._find_best_fingering(sorted_notes, fixed, held)
         best.fixed = fixed
+        best.held = held
         self._apply_colors(sorted_notes, best, offset=len(fixed))
 
         logger.debug(f"Chord playability: {best.playability.name}")
@@ -146,20 +147,24 @@ class ChordAnalyzer:
             if best is None or self._RANK[analysis.playability] < self._RANK[best.playability]:
                 best = analysis
 
-        return best or FingeringAnalysis(
+        if best is not None:
+            return best
+        reason, issue = self._explain_no_fingering(notes, fixed, held)
+        return FingeringAnalysis(
             playability=Playability.UNPLAYABLE,
             positions=[],
             fingers_used=0,
             has_barre=False,
-            reason=self._explain_no_fingering(notes, fixed, held),
+            reason=reason,
+            issue=issue,
         )
 
     def _explain_no_fingering(self, notes: List[Note], fixed: List[FretPosition],
-                              held: Sequence[Note]) -> str:
-        """Why no string assignment exists for the attacked notes."""
+                              held: Sequence[Note]) -> Tuple[str, str]:
+        """Why no string assignment exists for the attacked notes: (reason, issue)."""
         unreachable = [n for n in notes if not n.get_fret_pos()]
         if unreachable:
-            return '; '.join(self._out_of_range(n) for n in unreachable)
+            return '; '.join(self._out_of_range(n) for n in unreachable), Issue.OUT_OF_RANGE
 
         if self._fretboard is not None:
             strings = self._fretboard.num_strings
@@ -168,19 +173,20 @@ class ChordAnalyzer:
                           | {p.string for p in fixed})
         if len(notes) + len(fixed) > strings:
             held_text = f" + {_count(len(fixed), 'held note')}" if fixed else ''
-            return f"{_count(len(notes), 'note')}{held_text} on {strings} strings"
+            return (f"{_count(len(notes), 'note')}{held_text} on {strings} strings",
+                    Issue.STRINGS)
 
         if fixed:
-            held_list = ', '.join(f'{_pitch_name(n)} ({p.string}/{p.fret})'
+            held_list = ', '.join(f'{n.pitch_name} ({p.string}/{p.fret})'
                                   for n, p in zip(held, fixed))
-            return f"string conflict with held notes: {held_list}"
-        return "string conflict: " + ' '.join(_pitch_name(n) for n in notes)
+            return f"string conflict with held notes: {held_list}", Issue.CONFLICT
+        return "string conflict: " + ' '.join(n.pitch_name for n in notes), Issue.CONFLICT
 
     def _out_of_range(self, note: Note) -> str:
         if self._fretboard is None:
-            return f"{_pitch_name(note)} out of range"
-        detail = self._fretboard.out_of_range_reason(_midi(note))
-        return f"{_pitch_name(note)} out of range ({detail})"
+            return f"{note.pitch_name} out of range"
+        detail = self._fretboard.out_of_range_reason(note.midi)
+        return f"{note.pitch_name} out of range ({detail})"
     
     
     def _generate_fingering_options(self, notes: List[Note],
@@ -252,7 +258,7 @@ class ChordAnalyzer:
         span = max(fret_numbers) - min(fret_numbers)
         
         # Determine playability
-        playability, reason = self._determine_playability(
+        playability, reason, issue = self._determine_playability(
             fingers_needed, span, barre_info, len(open_strings) > 0
         )
         
@@ -263,7 +269,8 @@ class ChordAnalyzer:
             has_barre=barre_info['has_barre'],
             barre_fret=barre_info.get('fret'),
             span=span,
-            reason=reason
+            reason=reason,
+            issue=issue,
         )
     
     def _detect_barre(self, fretted_positions: List[FretPosition]) -> dict:
@@ -369,7 +376,8 @@ class ChordAnalyzer:
         return fingers
     
     def _determine_playability(self, fingers_needed: int, span: int, 
-                               barre_info: dict, has_open_strings: bool) -> Tuple[Playability, str]:
+                               barre_info: dict,
+                               has_open_strings: bool) -> Tuple[Playability, str, str]:
         """
         Determines final playability based on all factors.
         
@@ -385,7 +393,8 @@ class ChordAnalyzer:
         if fingers_needed > self.MAX_FINGERS:
             return (
                 Playability.UNPLAYABLE,
-                f"requires {fingers_needed} fingers (max {self.MAX_FINGERS})"
+                f"requires {fingers_needed} fingers (max {self.MAX_FINGERS})",
+                Issue.FINGERS,
             )
         
         # Rule 2 & 3: Span too large
@@ -393,7 +402,8 @@ class ChordAnalyzer:
         if span > max_span:
             return (
                 Playability.UNPLAYABLE,
-                f"fret span {span} (max {max_span})"
+                f"fret span {span} (max {max_span})",
+                Issue.SPAN,
             )
         
         # Rule 4: Pinky barré (difficult)
@@ -401,18 +411,20 @@ class ChordAnalyzer:
             strings = barre_info['strings']
             return (
                 Playability.DIFFICULT,
-                f"pinky barré on fret {barre_info['fret']}, strings {strings[0]}–{strings[-1]}"
+                f"pinky barré on fret {barre_info['fret']}, strings {strings[0]}–{strings[-1]}",
+                Issue.PINKY_BARRE,
             )
         
         # Rule 5: Maximum comfortable span
         if span == self.MAX_FRET_SPAN and not has_open_strings:
             return (
                 Playability.DIFFICULT,
-                f"maximum stretch (span {span})"
+                f"maximum stretch (span {span})",
+                Issue.STRETCH,
             )
         
         # All good!
-        return (Playability.PLAYABLE, "playable")
+        return (Playability.PLAYABLE, "playable", Issue.NONE)
     
     def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis,
                       offset: int = 0) -> None:
@@ -436,4 +448,4 @@ class ChordAnalyzer:
         Sort notes by sounding pitch, highest first. The sort is stable: notes with the
         same pitch keep their order.
         """
-        return sorted(notes, key=_midi, reverse=True)
+        return sorted(notes, key=lambda n: n.midi, reverse=True)

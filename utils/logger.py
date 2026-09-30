@@ -5,8 +5,10 @@ Provides logging functionality for all modules.
 """
 
 import logging
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
 from config import LOG_DIR, LOG_FORMAT, LOG_DATE_FORMAT
 from utils.io import writable_path
 
@@ -62,3 +64,11 @@ def setup_file_logging(level: int = logging.DEBUG) -> Path:
     logger.info('=' * 60)
     
     return log_file
+
+
+def current_log_file() -> Optional[Path]:
+    """The file the root logger writes to, if ``setup_file_logging`` was called."""
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.FileHandler):
+            return Path(handler.baseFilename)
+    return None

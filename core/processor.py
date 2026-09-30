@@ -1,317 +1,150 @@
 # -*- coding: utf-8 -*-
 """
-ISPOG - Core Processor
-Main workflow orchestrator for guitar playability analysis.
-This module coordinates the entire analysis pipeline.
+ISPOG - Processor
+One analysis, from file to results: load, select parts, finger, color, label, credit,
+serialize. Nothing is saved and no dialog is shown (plan, D6): the caller (desktop GUI or
+web app) decides where the outputs go. Errors the user must read are IspogError.
+
+    result = analyze(AnalysisConfig('score.mxl', tuning=('E4', 'B3', 'G3', 'D3', 'A2', 'E2')))
+    Path('score_ispog.musicxml').write_bytes(result.outputs['full'])
 """
 
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Sequence, Union
 
-from utils.logger import get_logger
-from utils.io import load_musicxml
-from .entities import Fretboard
-from .musicxml import (
-    parse_measures,
-    merge_bars_to_score,
-    analyze_score_playability,
-    write_colored_score,
-    create_debug_note_list
-)
+from .errors import NoGuitarPartError
+from .fretboard import Fretboard
+from .model import AnalysisResult, PartInfo, PartReport
+from .playability import analyze_notes
+from .reader import list_parts, load_score, read_part
+from .report import render_notes_tsv
+from .writer import (add_ispog_credit, annotate, colorize, extract_part,
+                     remove_annotations, serialize)
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+
+OUTPUT_MODES = ('full', 'split')
+MIN_STRINGS, MAX_STRINGS = 4, 8
+MIN_FRETS, MAX_FRETS = 12, 24
 
 
+@dataclass(frozen=True)
 class AnalysisConfig:
-    """Configuration for a single analysis run."""
-    
-    def __init__(
-        self,
-        filepath: str,
-        num_strings: int,
-        tuning: list[str],
-        num_frets: int = 19
-    ):
-        self.filepath = filepath
-        self.num_strings = num_strings
-        self.tuning = tuning
-        self.num_frets = num_frets
-        
-        # Validate
-        self._validate()
-    
-    def _validate(self):
-        """Validate configuration parameters."""
-        if not Path(self.filepath).exists():
-            raise FileNotFoundError(f"File not found: {self.filepath}")
-        
-        if not 4 <= self.num_strings <= 8:
-            raise ValueError(f"Invalid number of strings: {self.num_strings}")
-        
-        if len(self.tuning) != self.num_strings:
-            raise ValueError(
-                f"Tuning list length ({len(self.tuning)}) "
-                f"doesn't match num_strings ({self.num_strings})"
-            )
-        
-        if self.num_frets < 12 or self.num_frets > 24:
-            raise ValueError(f"Invalid number of frets: {self.num_frets}")
-
-
-class PlayabilityAnalyzer:
     """
-    Main processor for guitar playability analysis.
-    Orchestrates the complete workflow from file loading to output generation.
+    Parameters of one analysis.
+
+    Attributes:
+        filepath: .musicxml, .xml or .mxl score.
+        tuning: open strings, string 1 (highest) first; its length is the number of strings.
+        num_frets: frets on the neck.
+        part_ids: parts to analyze; None = the guitar parts found in the score.
+        output_mode: 'full' (one score) or 'split' (one score per analyzed part).
+        labels: write a short label above difficult and unplayable points.
     """
-    
-    def __init__(self, config: AnalysisConfig):
-        """
-        Initialize analyzer with configuration.
-        
-        Args:
-            config: Analysis configuration object
-        """
-        self.config = config
-        logger.info("="*60)
-        logger.info("Playability Analyzer initialized")
-        logger.info(f"File: {config.filepath}")
-        logger.info(f"Strings: {config.num_strings}")
-        logger.info(f"Tuning: {config.tuning}")
-        logger.info(f"Frets: {config.num_frets}")
-        logger.info("="*60)
-    
-    def analyze(self) -> bool:
-        """
-        Execute complete analysis workflow.
-        
-        Returns:
-            True if analysis completed successfully, False otherwise
-        """
-        try:
-            logger.info("Starting analysis workflow")
-            
-            # Step 1: Load MusicXML file
-            if not self._load_file():
-                return False
-            
-            # Step 2: Generate fretboard matrix
-            if not self._generate_fretboard():
-                return False
-            
-            # Step 3: Parse measures
-            if not self._parse_measures():
-                return False
-            
-            # Step 4: Merge bars into continuous score
-            if not self._merge_bars():
-                return False
-            
-            # Step 5: Analyze playability and color notes
-            if not self._analyze_playability():
-                return False
-            
-            # Step 6: Write colored score and save
-            if not self._write_output():
-                return False
-            
-            # Step 7: Generate debug file
-            self._generate_debug_file()
-            
-            logger.info("="*60)
-            logger.info("Analysis workflow completed successfully!")
-            logger.info("="*60)
-            return True
-            
-        except Exception:
-            logger.error("Critical error in analysis workflow", exc_info=True)
-            return False
-    
-    def _load_file(self) -> bool:
-        """Step 1: Load MusicXML file."""
-        logger.info("Step 1: Loading MusicXML file")
-        
-        self.score = load_musicxml(self.config.filepath)
-        
-        if self.score is None:
-            logger.error("Failed to load file")
-            return False
-        
-        logger.info(f"Loaded {len(self.score)} characters")
-        return True
-    
-    def _generate_fretboard(self) -> bool:
-        """Step 2: Generate fretboard matrix."""
-        logger.info("Step 2: Generating fretboard matrix")
-        
-        try:
-            fretboard_obj = Fretboard(
-                self.config.num_strings,
-                self.config.num_frets,
-                self.config.tuning
-            )
-            self.fretboard_matrix = fretboard_obj.get_matrix()
-            
-            logger.info(
-                f"Fretboard generated: {len(self.fretboard_matrix)} strings, "
-                f"{len(self.fretboard_matrix[0])} positions per string"
-            )
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to generate fretboard: {e}", exc_info=True)
-            return False
-    
-    def _parse_measures(self) -> bool:
-        """Step 3: Parse MusicXML into measures."""
-        logger.info("Step 3: Parsing measures")
-        
-        try:
-            self.bar_objects, self.score_list = parse_measures(
-                self.score,
-                self.fretboard_matrix
-            )
-            
-            logger.info(f"Parsed {len(self.bar_objects)} measures")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to parse measures: {e}", exc_info=True)
-            return False
-    
-    def _merge_bars(self) -> bool:
-        """Step 4: Merge bars into continuous score."""
-        logger.info("Step 4: Merging bars into continuous score")
-        
-        try:
-            self.final_score = merge_bars_to_score(self.bar_objects)
-            
-            # Log statistics
-            for voice in range(1, 5):
-                note_count = len(self.final_score[voice])
-                logger.info(f"Voice {voice}: {note_count} notes")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to merge bars: {e}", exc_info=True)
-            return False
-    
-    def _analyze_playability(self) -> bool:
-        """Step 5: Analyze playability and color notes."""
-        logger.info("Step 5: Analyzing playability")
-        
-        try:
-            analyze_score_playability(self.final_score)
-            
-            # Count colors for statistics
-            color_stats = {'green': 0, 'orange': 0, 'red': 0, 'black': 0}
-            
-            for voice in range(1, 5):
-                for note in self.final_score[voice]:
-                    color = note.get_color()
-                    if color in color_stats:
-                        color_stats[color] += 1
-            
-            logger.info("Playability analysis complete:")
-            logger.info(f"  🟢 Playable (green): {color_stats['green']}")
-            logger.info(f"  🟠 Difficult (orange): {color_stats['orange']}")
-            logger.info(f"  🔴 Unplayable (red): {color_stats['red']}")
-            logger.info(f"  ⚫ Other (black): {color_stats['black']}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to analyze playability: {e}", exc_info=True)
-            return False
-    
-    def _write_output(self) -> bool:
-        """Step 6: Write colored score and save."""
-        logger.info("Step 6: Writing colored output")
-        
-        try:
-            from utils.io import save_musicxml
-            
-            # Generate colored XML
-            colored_xml = write_colored_score(self.score_list, self.bar_objects)
-            logger.info(f"Colored score generated: {len(colored_xml)} characters")
 
-            # Save with dialog
-            save_musicxml(colored_xml, "analyzed.musicxml")
-            
-            logger.info("Colored score written and saved")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to write output: {e}", exc_info=True)
-            return False
-    
-    def _generate_debug_file(self) -> None:
-        """Step 7: Generate debug note list file."""
-        logger.info("Step 7: Generating debug file")
-        
-        try:
-            create_debug_note_list(self.final_score, self.config.filepath)
-            logger.info("Debug file generated")
-        except Exception as e:
-            logger.warning(f"Failed to generate debug file: {e}")
-            # Non-critical, continue anyway
-
-
-# ============================================================================
-# PUBLIC API
-# ============================================================================
-
-def analyze_file(
-    filepath: str,
-    num_strings: int,
-    tuning: list[str],
+    filepath: Union[str, Path]
+    tuning: Sequence[str]
     num_frets: int = 19
-) -> bool:
+    part_ids: Optional[Sequence[str]] = None
+    output_mode: str = 'full'
+    labels: bool = True
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'filepath', Path(self.filepath))
+        object.__setattr__(self, 'tuning', tuple(self.tuning))
+        if self.part_ids is not None:
+            object.__setattr__(self, 'part_ids', tuple(self.part_ids))
+        if not MIN_STRINGS <= len(self.tuning) <= MAX_STRINGS:
+            raise ValueError(f'invalid number of strings: {len(self.tuning)}')
+        if not MIN_FRETS <= self.num_frets <= MAX_FRETS:
+            raise ValueError(f'invalid number of frets: {self.num_frets}')
+        if self.output_mode not in OUTPUT_MODES:
+            raise ValueError(f'invalid output mode: {self.output_mode!r}')
+        Fretboard(self.tuning, self.num_frets)          # validates the note names
+
+    @property
+    def num_strings(self) -> int:
+        return len(self.tuning)
+
+
+def analyze(config: AnalysisConfig) -> AnalysisResult:
     """
-    Analyze a MusicXML file for guitar playability.
-    
-    This is the main entry point for the analysis workflow.
-    
-    Args:
-        filepath: Path to MusicXML file
-        num_strings: Number of guitar strings (4-8)
-        tuning: List of tuning notes (e.g., ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'])
-        num_frets: Number of frets on guitar (default: 19)
-        
-    Returns:
-        True if analysis completed successfully, False otherwise
-        
-    Example:
-        >>> success = analyze_file(
-        ...     'song.musicxml',
-        ...     6,
-        ...     ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']
-        ... )
-        >>> if success:
-        ...     print("Analysis complete!")
+    Analyze a score and return the colored MusicXML and a report for every analyzed part.
+
+    Raises:
+        UnsupportedFileError: the file is not a readable MusicXML score.
+        NoGuitarPartError: no part was selected and the score has no guitar part.
     """
-    try:
-        config = AnalysisConfig(filepath, num_strings, tuning, num_frets)
-        analyzer = PlayabilityAnalyzer(config)
-        return analyzer.analyze()
-    except Exception as e:
-        logger.error(f"Analysis failed: {e}", exc_info=True)
-        return False
+    logger.info('Analysis of %s: tuning %s, %d frets, parts %s, output %s, labels %s',
+                config.filepath.name, ' '.join(config.tuning), config.num_frets,
+                config.part_ids or 'auto', config.output_mode, config.labels)
+    tree = load_score(config.filepath)
+    targets = select_targets(list_parts(tree), config.part_ids, config.filepath.name)
+    fretboard = Fretboard(config.tuning, config.num_frets)
+
+    reports = []
+    for part in targets:
+        notes = read_part(part)
+        playability = analyze_notes(notes, fretboard)
+        colorize(notes)
+        if config.labels:
+            annotate(part.element, playability.events)
+        else:
+            remove_annotations(part.element)
+        report = PartReport(part_id=part.part_id, name=part.name, notes=notes,
+                            events=playability.events, not_analyzed=playability.not_analyzed)
+        logger.info('Part %s %r: %s', part.part_id, part.name, report.counts)
+        reports.append(report)
+
+    add_ispog_credit(tree)
+    if config.output_mode == 'full':
+        outputs = {'full': serialize(tree)}
+    else:
+        outputs = {part.part_id: serialize(extract_part(tree, part.part_id)) for part in targets}
+
+    return AnalysisResult(source_name=config.filepath.name, tuning=config.tuning,
+                          num_frets=config.num_frets, outputs=outputs, reports=reports)
 
 
-# ============================================================================
-# MAIN (for testing)
-# ============================================================================
+def select_targets(parts: list[PartInfo], part_ids: Optional[Sequence[str]],
+                   source_name: str = '') -> list[PartInfo]:
+    """
+    Parts to analyze:
+    - explicit ``part_ids``, in score order;
+    - otherwise a single-part score is always analyzed (guitar or not, as in 0.9);
+    - otherwise the parts detected as guitars.
 
-if __name__ == '__main__':
-    # Test configuration
-    test_config = AnalysisConfig(
-        filepath='test.musicxml',
-        num_strings=6,
-        tuning=['E4', 'B3', 'G3', 'D3', 'A2', 'E2'],
-        num_frets=19
-    )
-    
-    analyzer = PlayabilityAnalyzer(test_config)
-    success = analyzer.analyze()
-    
-    print(f"\nAnalysis {'succeeded' if success else 'failed'}!")
+    Raises:
+        ValueError: an explicit part id is not in the score.
+        NoGuitarPartError: nothing to analyze.
+    """
+    if part_ids is not None:
+        known = {p.part_id for p in parts}
+        unknown = [pid for pid in part_ids if pid not in known]
+        if unknown:
+            raise ValueError(f'unknown part id(s): {", ".join(unknown)}')
+        targets = [p for p in parts if p.part_id in part_ids]
+    elif len(parts) == 1:
+        targets = parts
+    else:
+        targets = [p for p in parts if p.is_guitar]
+    if not targets:
+        raise NoGuitarPartError(
+            f"No guitar part found in '{source_name}'. Select the parts to analyze.")
+    return targets
+
+
+def write_notes_logs(result: AnalysisResult, directory: Path) -> list[Path]:
+    """Save the technical note list of every part as ``<stem>_<part>_notes.tsv``."""
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = Path(result.source_name).stem
+    paths = []
+    for report in result.reports:
+        path = directory / f'{stem}_{report.part_id}_notes.tsv'
+        path.write_text(render_notes_tsv(report), encoding='utf-8')
+        paths.append(path)
+    return paths

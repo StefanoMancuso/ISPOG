@@ -78,16 +78,11 @@ STANDARD_TUNING_INDICES = [52, 47, 43, 38, 33, 28, 23, 18]
 # ============================================================================
 
 SUPPORTED_FILE_TYPES = (
-    ('MusicXML files', '*.musicxml *.mxl'),
-    ('MusicXML (uncompressed)', '*.musicxml'),
+    ('MusicXML files', '*.musicxml *.mxl *.xml'),
+    ('MusicXML (uncompressed)', '*.musicxml *.xml'),
     ('MusicXML (compressed)', '*.mxl'),
     ('All files', '*.*')
 )
-
-FILE_EXTENSIONS = {
-    'musicxml': 'MusicXML',
-    'mxl': 'Compressed MusicXML',
-}
 
 # ============================================================================
 # COLOR SCHEME
@@ -114,14 +109,53 @@ COLOR_CODES = {
 
 UI_TEXT = {
     'no_file_loaded': 'No file loaded',
-    'file_loaded': 'File loaded.. Ready!',
+    'file_loaded': 'File loaded. Ready!',
     'file_error': 'File Error',
     'no_file_selected': 'No file was loaded',
-    'invalid_format': 'Not a MusicXML file. Maybe it is compressed?',
     'select_file': 'Select a file first',
     'processing': 'Processing...',
     'complete': 'Analysis complete!',
     'error_occurred': 'An error occurred during processing',
+    'unexpected_error': 'Unexpected error: {error}\n\nDetails are in the log file:\n{log}',
+    'save_title': 'Save analyzed score',
+    'saved': 'Saved:\n{score}\n{report}',
+    'part_summary': '{name}: {total} notes · {orange} difficult · {red} unplayable{where}',
+    'part_summary_where': ' (m. {measures})',
+}
+
+# Playability report (core/report.py)
+REPORT_TEXT = {
+    'title': 'ISPOG {version} — Playability report',
+    'file': 'File:',
+    'tuning': 'Tuning:',
+    'tuning_value': '{tuning} · {frets} frets',
+    'date': 'Date:',
+    'part': '== {name} ({part_id}) ==',
+    'summary': ('Notes analyzed {analyzed} · playable {green} ({percent}%) · difficult {orange}'
+                ' · unplayable {red} · not analyzed {black}'),
+    'point': 'm. {measure}, beat {beat} — {status}',
+    'grace': ' (grace notes)',
+    'unplayable': 'UNPLAYABLE',
+    'difficult': 'DIFFICULT',
+    'notes': 'Notes:',
+    'held': 'Held:',
+    'reason': 'Reason:',
+    'closest': 'Closest:',
+    'no_problems': 'No difficult or unplayable passages.',
+    'not_analyzed': 'Not analyzed',
+    'not_analyzed_item': 'm. {measure}, beat {beat} — {pitch}: {reason}',
+}
+
+# Short labels written above difficult and unplayable points in the score
+# (core/writer.py, annotate). Keys are core.analyzer.Issue values.
+LABEL_TEXT = {
+    'fingers': '{fingers} fingers',
+    'span': 'span {span}',
+    'out_of_range': 'out of range',
+    'strings': 'no free string',
+    'conflict': 'string conflict',
+    'pinky_barre': 'pinky barré',
+    'stretch': 'stretch',
 }
 
 # ============================================================================

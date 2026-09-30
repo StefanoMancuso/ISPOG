@@ -99,9 +99,9 @@ def _analyze(analyzer: ChordAnalyzer, result: PlayabilityResult, onset: Fraction
     analysis = analyzer.analyze_chord(notes, sustained)
     if analysis is None:
         return
-    held = [n for n in sustained if n.get_fret() != (-1, -1) and n.color != 'red']
     result.events.append(ChordEvent(onset=onset, measure_number=notes[0].measure_number,
-                                    notes=notes, held=held, analysis=analysis, grace=grace))
+                                    notes=notes, held=analysis.held, analysis=analysis,
+                                    grace=grace))
 
 
 def _grace_chords(graces) -> list[list[Note]]:

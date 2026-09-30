@@ -4,19 +4,22 @@ ISPOG - GUI Widgets
 Contains all custom widget classes for the GUI.
 """
 
+import queue
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, messagebox
 from pathlib import Path
 from typing import Optional
 
 from config.settings import (
-    SUPPORTED_FILE_TYPES, TUNING_PRESETS, NOTE_LIST,
-    STANDARD_TUNING_INDICES, MIN_STRINGS, MAX_STRINGS,
-    UI_TEXT, DEFAULT_NUM_STRINGS
+    TUNING_PRESETS, NOTE_LIST, STANDARD_TUNING_INDICES, MIN_STRINGS, MAX_STRINGS,
+    UI_TEXT, DEFAULT_NUM_STRINGS, LOG_DIR
 )
-from utils.logger import get_logger
-from core.processor import analyze_file
+from core import (AnalysisConfig, AnalysisResult, IspogError, analyze, render_report,
+                  write_notes_logs)
+from utils.io import writable_path
+from utils.logger import current_log_file, get_logger
+from .dialogs import ask_open_file, ask_save_file
 
 logger = get_logger(__name__)
 
@@ -57,22 +60,14 @@ class FileSelectorWidget(ttk.LabelFrame):
         logger.info('Opening file selection dialog')
         
         try:
-            file = filedialog.askopenfile(
-                title='Open a MusicXML file (uncompressed)',
-                initialdir=Path.home(),
-                filetypes=SUPPORTED_FILE_TYPES
-            )
-            
-            if file:
-                self.filepath.set(file.name)
-                self.status_text.set(UI_TEXT['file_loaded'])
+            current = self.get_filepath()
+            path = ask_open_file(Path(current).parent if current else Path.home())
+
+            if path:
+                self.filepath.set(str(path))
+                self.status_text.set(path.name)
                 self.status_label.config(foreground='green')
-                logger.info(f'File selected: {file.name}')
-                
-                messagebox.showinfo(
-                    title='File Selected',
-                    message=f'Selected:\n{Path(file.name).name}'
-                )
+                logger.info(f'File selected: {path}')
             else:
                 logger.info('File selection cancelled by user')
                 
@@ -287,11 +282,12 @@ class ProcessButton(ttk.LabelFrame):
 
         logger.debug('ProcessButton initialized')
     
+    POLL_MS = 50                                   # worker result polling interval
+
     def _run_analysis(self):
-        """Execute the playability analysis."""
+        """Run the analysis in a worker thread; results are handled in the Tk thread."""
         logger.info('=== Analysis started ===')
-        
-        # Validate file selection
+
         if not self.file_selector.has_file():
             logger.warning('Analysis attempted without file selection')
             messagebox.showwarning(
@@ -299,62 +295,92 @@ class ProcessButton(ttk.LabelFrame):
                 message=UI_TEXT['no_file_selected']
             )
             return
-        
-        filepath = self.file_selector.get_filepath()
-        
-        # Validate file extension
-        if not (filepath.endswith('.musicxml') or filepath.endswith('.mxl')):
-            logger.warning(f'Invalid file extension: {filepath}')
-            messagebox.showwarning(
-                title=UI_TEXT['file_error'],
-                message=UI_TEXT['invalid_format']
-            )
+
+        try:
+            config = AnalysisConfig(self.file_selector.get_filepath(),
+                                    tuning=self.tuning_widget.get_tuning())
+        except ValueError as e:
+            logger.warning(f'Invalid configuration: {e}')
+            messagebox.showerror(title='Error', message=str(e))
             return
-        
-        # Get tuning configuration
-        tuning = self.tuning_widget.get_tuning()
-        num_strings = self.tuning_widget.get_num_strings()
-        
-        logger.info(f'Processing file: {filepath}')
-        logger.info(f'Configuration: {num_strings} strings, tuning: {tuning}')
-        
-        # Disable button during processing, progress bar
+
         self.run_button.config(state='disabled', text=UI_TEXT['processing'])
         self.progress.pack(fill='x', padx=15, pady=(0, 10))
-        self.progress.start(10)  # animation speed
+        self.progress.start(10)
 
-        # thread function
-        def worker():
-            error = None
+        outcome: queue.Queue = queue.Queue(maxsize=1)
+
+        def worker() -> None:
+            # No Tk calls here: Tkinter is not thread-safe. The Tk thread polls the queue.
             try:
-                if not analyze_file(filepath, num_strings, tuning):
-                    error = RuntimeError('Analysis failed, see log file for details')
+                outcome.put((analyze(config), None))
+            except IspogError as e:
+                logger.warning(f'Analysis refused: {e}')
+                outcome.put((None, e))
             except Exception as e:
-                error = e
                 logger.error('Analysis failed', exc_info=True)
+                outcome.put((None, e))
 
-            self.after(0, lambda: self._on_analysis_finished(error))
-            
         threading.Thread(target=worker, daemon=True).start()
+        self._poll(config, outcome)
 
-    def _on_analysis_finished(self, error: Exception | None):
-        # Ferma e nascondi la progress bar
+    def _poll(self, config: AnalysisConfig, outcome: queue.Queue) -> None:
+        try:
+            result, error = outcome.get_nowait()
+        except queue.Empty:
+            self.after(self.POLL_MS, self._poll, config, outcome)
+            return
+        self._on_analysis_finished(config, result, error)
+
+    def _on_analysis_finished(self, config: AnalysisConfig,
+                              result: Optional[AnalysisResult],
+                              error: Optional[Exception]) -> None:
+        """Tk thread: stop the progress bar, then save the outputs or show the error."""
         self.progress.stop()
         self.progress.pack_forget()
-
-        # Riabilita bottone
         self.run_button.config(state='normal', text='Analyze Playability')
 
-        if error is None:
-            logger.info('Analysis completed successfully')
-            messagebox.showinfo(
-                title='Success',
-                message=UI_TEXT['complete']
-            )
+        if error is not None:
+            messagebox.showerror(title='Error', message=self._error_message(error))
         else:
-            messagebox.showerror(
-                title='Error',
-                message=f'{UI_TEXT["error_occurred"]}:\\n\\n{str(error)}'
-            )
+            self._save(config, result)
         logger.info('=== Analysis finished ===')
-        
+
+    def _save(self, config: AnalysisConfig, result: AnalysisResult) -> None:
+        source = config.filepath
+        target = ask_save_file(f'{source.stem}_ispog.musicxml', source.parent)
+        if target is None:
+            logger.info('Save cancelled by user')
+            return
+        report_path = target.with_name(f'{target.stem}_report.txt')
+        try:
+            target.write_bytes(result.outputs['full'])
+            report_path.write_text(render_report(result), encoding='utf-8')
+            write_notes_logs(result, writable_path(LOG_DIR))
+        except OSError as e:
+            logger.error('Saving failed', exc_info=True)
+            messagebox.showerror(title='Error', message=f'Could not save the files:\n{e}')
+            return
+        logger.info(f'Saved {target} and {report_path}')
+        summary = '\n'.join(self._part_summary(report) for report in result.reports)
+        saved = UI_TEXT['saved'].format(score=target.name, report=report_path.name)
+        messagebox.showinfo(title=UI_TEXT['complete'], message=f'{summary}\n\n{saved}')
+
+    @staticmethod
+    def _part_summary(report) -> str:
+        counts = report.counts
+        red_measures = report.red_measures
+        where = ''
+        if red_measures:
+            where = UI_TEXT['part_summary_where'].format(measures=', '.join(red_measures[:8])
+                                                         + (' …' if len(red_measures) > 8 else ''))
+        total = counts['green'] + counts['orange'] + counts['red']
+        return UI_TEXT['part_summary'].format(name=report.name, total=total,
+                                              orange=counts['orange'], red=counts['red'],
+                                              where=where)
+
+    @staticmethod
+    def _error_message(error: Exception) -> str:
+        if isinstance(error, IspogError):
+            return str(error)
+        return UI_TEXT['unexpected_error'].format(error=error, log=current_log_file() or '-')

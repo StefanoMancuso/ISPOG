@@ -13,19 +13,24 @@ from __future__ import annotations
 
 import copy
 import logging
+from fractions import Fraction
 from typing import Iterable, Optional
 
 from lxml import etree
 
-from config.settings import COLOR_CODES
+from config.settings import COLOR_CODES, LABEL_TEXT
 from config.version import __version__
 
+from .analyzer import Playability
 from .model import DEFAULT_COLOR, Note
+from .playability import ChordEvent
 
 logger = logging.getLogger(__name__)
 
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 CREDIT_ID = 'ispog-credit'
+LABEL_ID_PREFIX = 'ispog-label-'
+LABEL_FONT_SIZE = '7'
 CREDIT_PREFIX = 'Analyzed by ISPOG'
 
 # Children of <note> that follow <notehead> in the MusicXML 4.0 schema
@@ -85,6 +90,101 @@ def colorize(notes: Iterable[Note]) -> int:
         count += 1
     logger.debug('Colored %d noteheads', count)
     return count
+
+
+# ---------------------------------------------------------------------------
+# Labels
+# ---------------------------------------------------------------------------
+
+_SEVERITY = {Playability.PLAYABLE: 0, Playability.DIFFICULT: 1, Playability.UNPLAYABLE: 2}
+
+
+def remove_annotations(part_element: etree._Element) -> int:
+    """Remove the labels of an earlier ISPOG analysis from a part. Returns how many."""
+    labels = [d for d in part_element.iter('direction')
+              if (d.get('id') or '').startswith(LABEL_ID_PREFIX)]
+    for direction in labels:
+        _remove(direction)
+    return len(labels)
+
+
+def annotate(part_element: etree._Element, events: Iterable[ChordEvent]) -> int:
+    """
+    Write a short label (e.g. ``span 6``) above every difficult or unplayable point of a
+    part, in the color of the point: one label per onset, for the worst event there.
+
+    The label is a ``<direction>`` placed right before the first note of the onset, so it
+    takes that note's position in time; in a chord, before the chord's first note.
+    Labels from earlier analyses are removed first. Returns the number of labels written.
+    """
+    remove_annotations(part_element)
+    order = {el: i for i, el in enumerate(part_element.iter('note'))}
+
+    worst: dict[Fraction, ChordEvent] = {}
+    notes_at: dict[Fraction, list[Note]] = {}
+    for event in events:
+        notes_at.setdefault(event.onset, []).extend(event.notes)
+        if event.analysis.playability is Playability.PLAYABLE:
+            continue
+        current = worst.get(event.onset)
+        if current is None or (_SEVERITY[event.analysis.playability]
+                               > _SEVERITY[current.analysis.playability]):
+            worst[event.onset] = event
+
+    part_id = part_element.get('id', '')
+    for index, onset in enumerate(sorted(worst), start=1):
+        event = worst[onset]
+        first = min((n.element for n in notes_at[onset] if n.element is not None),
+                    key=order.__getitem__)
+        anchor = _chord_head(first)
+        direction = _label(event, f'{LABEL_ID_PREFIX}{part_id}-{index}', anchor.findtext('staff'))
+        _insert_child(anchor.getparent(), direction, before=anchor)
+        if direction.tail and not direction.tail.strip():
+            _pretty(direction, direction.tail)
+    return len(worst)
+
+
+def label_text(event: ChordEvent) -> str:
+    analysis = event.analysis
+    template = LABEL_TEXT.get(analysis.issue, analysis.issue)
+    return template.format(fingers=analysis.fingers_used, span=analysis.span)
+
+
+def _label(event: ChordEvent, label_id: str, staff: Optional[str]) -> etree._Element:
+    direction = etree.Element('direction', placement='above', id=label_id)
+    direction_type = etree.SubElement(direction, 'direction-type')
+    words = etree.SubElement(direction_type, 'words')
+    words.text = label_text(event)
+    words.set('font-style', 'italic')
+    words.set('font-size', LABEL_FONT_SIZE)
+    words.set('color', COLOR_CODES[event.analysis.playability.value])
+    if staff:
+        etree.SubElement(direction, 'staff').text = staff
+    return direction
+
+
+def _chord_head(note_el: etree._Element) -> etree._Element:
+    """The first ``<note>`` of the chord ``note_el`` belongs to (itself if not a chord)."""
+    head = note_el
+    while head.find('chord') is not None:
+        previous = head.getprevious()
+        while previous is not None and previous.tag != 'note':
+            previous = previous.getprevious()
+        if previous is None:
+            break
+        head = previous
+    return head
+
+
+def _pretty(element: etree._Element, indent: str, step: str = '  ') -> None:
+    """Indent a new subtree to match the surrounding layout (``indent``: its own)."""
+    children = list(element)
+    if not children:
+        return
+    element.text = indent + step
+    for i, child in enumerate(children):
+        _pretty(child, indent + step, step)
+        child.tail = indent + step if i < len(children) - 1 else indent
 
 
 # ---------------------------------------------------------------------------

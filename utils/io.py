@@ -1,25 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-ISPOG - File I/O Utilities
-Loading and saving MusicXML files, and paths to bundled and writable resources.
+ISPOG - Paths
+Locations of bundled (read-only) and writable resources.
 
 Paths are anchored to the project root, never to the current working directory (plan, D9):
 the result is the same whether ISPOG is launched from VS Code, pytest, a terminal or Render.
-
-Tkinter is imported inside ``load_musicxml`` and ``save_musicxml`` only, so importing the
-core never loads it (plan, D6). Both functions are transitional: in F6 the dialogs move to
-``gui/dialogs.py`` and file reading to ``core.reader.load_score``.
+Scores are read by ``core.reader.load_score``; save dialogs live in ``gui/dialogs.py``.
 """
 
-import logging
 import os
-import re
 import sys
-import zipfile
 from pathlib import Path
-from typing import Optional, Union
-
-logger = logging.getLogger(__name__)
+from typing import Union
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 """Folder containing ``core/``, ``config/``, ``gui/`` and ``utils/``."""
@@ -54,134 +46,3 @@ def writable_path(relative_path: StrPath) -> Path:
         app_data.mkdir(parents=True, exist_ok=True)
         return app_data / relative_path
     return PROJECT_ROOT / relative_path
-
-
-def load_musicxml(file_path: str) -> Optional[str]:
-    """
-    Load a MusicXML file and return its content.
-    Supports both .musicxml (uncompressed) and .mxl (compressed) formats.
-
-    Args:
-        file_path: Path to the MusicXML file
-
-    Returns:
-        File content as string, or None if error
-    """
-    logger.info(f"Loading MusicXML file: {file_path}")
-
-    try:
-        if file_path.lower().endswith('.mxl'):
-            return _load_compressed_mxl(file_path)
-        return _load_uncompressed_musicxml(file_path)
-
-    except Exception as e:
-        logger.error(f"Error loading file: {e}", exc_info=True)
-        from tkinter.messagebox import showinfo
-        showinfo(
-            title='File Error',
-            message=f'Error loading file:\n{str(e)}'
-        )
-        return None
-
-
-def _load_uncompressed_musicxml(file_path: str) -> str:
-    """Load uncompressed .musicxml file."""
-    with open(file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
-
-    logger.info(f"Successfully loaded {len(content)} characters")
-    return content
-
-
-def _load_compressed_mxl(file_path: str) -> str:
-    """
-    Load and decompress .mxl file.
-
-    MXL files are ZIP archives containing:
-    - META-INF/container.xml (points to the main .musicxml file)
-    - One or more .musicxml files
-    """
-    logger.info(f"Decompressing MXL file: {file_path}")
-
-    with zipfile.ZipFile(file_path, 'r') as zip_file:
-        musicxml_file = None
-
-        # The main file is referenced in META-INF/container.xml; MuseScore names it
-        # score.xml, other editors <title>.musicxml
-        try:
-            container = zip_file.read('META-INF/container.xml').decode('utf-8')
-            match = re.search(r'full-path="([^"]+\.(?:musicxml|xml))"', container)
-            if match:
-                musicxml_file = match.group(1)
-                logger.debug(f"Found main file in container: {musicxml_file}")
-        except KeyError:
-            logger.warning("No container.xml found, searching for a score file")
-
-        # Fallback: first .musicxml or .xml file outside META-INF/
-        if not musicxml_file:
-            for name in zip_file.namelist():
-                if (name.lower().endswith(('.musicxml', '.xml'))
-                        and not name.startswith('META-INF/')):
-                    musicxml_file = name
-                    logger.debug(f"Using first score file found: {musicxml_file}")
-                    break
-
-        if not musicxml_file:
-            raise ValueError("No MusicXML score found in .mxl archive")
-
-        content = zip_file.read(musicxml_file).decode('utf-8')
-        logger.info(f"Successfully decompressed {len(content)} characters")
-        return content
-
-
-def save_musicxml(content: str, default_name: str = "output.musicxml") -> bool:
-    """
-    Save MusicXML content to file using file dialog.
-
-    Args:
-        content: MusicXML content to save
-        default_name: Default filename suggestion
-
-    Returns:
-        True if saved successfully, False otherwise
-    """
-    import tkinter.filedialog as fd
-    from tkinter.messagebox import showinfo
-
-    logger.info("Opening save dialog")
-
-    file_types = (
-        ('MusicXML (uncompressed)', '*.musicxml'),
-        ('All files', '*.*')
-    )
-
-    try:
-        file = fd.asksaveasfile(
-            title='Save MusicXML File',
-            initialdir=Path.home(),
-            initialfile=default_name,
-            filetypes=file_types,
-            defaultextension=".musicxml"
-        )
-
-        if file:
-            file.write(content)
-            file.close()
-
-            logger.info(f"File saved successfully: {file.name}")
-            showinfo(
-                title='File Saved',
-                message=f'File saved successfully:\n{Path(file.name).name}'
-            )
-            return True
-
-        logger.info("Save cancelled by user")
-        return False
-
-    except Exception as e:
-        logger.error(f"Error saving file: {e}", exc_info=True)
-        showinfo(
-            title='Save Error',
-            message=f'Error saving file:\n{str(e)}'
-        )
-        return False

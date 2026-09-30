@@ -10,9 +10,10 @@ in tests/baseline/:
 Run it ONCE, before the lxml refactor, from the repository root:
     python tests/tools/make_baseline.py tests/fixtures/Test01.musicxml
 
-After the refactor this script no longer runs (core.entities and core.musicxml are
-removed): the files it produced are the reference, and extract_colors.py --diff compares
-the new output against them.
+HISTORICAL: this script no longer runs. It needs the 0.9 string pipeline (core.entities,
+core.musicxml, utils.io.load_musicxml), removed in phase F5. The files it produced in F0
+are the reference; to run it again, check out the commit "F0: pre-refactor baseline for
+Test01". extract_colors.py --diff compares a new output against the baseline.
 
 Only meaningful for single-part guitar scores: the current code merges all parts into
 one sequence, so a multi-part file such as test_poli has no valid baseline.

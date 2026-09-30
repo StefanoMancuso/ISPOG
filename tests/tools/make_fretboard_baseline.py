@@ -7,7 +7,9 @@ alterations -1, 0, +1, for a few tunings, and saves the positions to
 tests/baseline/fretboard_0.9.2.json. tests/test_fretboard.py compares the MIDI-based
 core.fretboard against this file.
 
-Run it ONCE, while core.entities still exists, from the repository root:
+HISTORICAL: this script no longer runs, core.entities was removed in phase F5. It was run
+once in F3; to run it again, check out the commit "F3: MIDI fretboard and playability
+engine". From the repository root:
     python tests/tools/make_fretboard_baseline.py
 """
 

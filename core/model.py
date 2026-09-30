@@ -12,9 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from lxml import etree
+
+if TYPE_CHECKING:
+    from .playability import ChordEvent
 
 STEP_SEMITONES = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 _ACCIDENTALS = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
@@ -204,3 +207,52 @@ class Note:
 
     def set_reason(self, reason: str) -> None:
         self.reason = reason
+
+
+# ---------------------------------------------------------------------------
+# Analysis results
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PartReport:
+    """Outcome of the analysis of one part."""
+
+    part_id: str
+    name: str
+    notes: list[Note] = field(repr=False)
+    events: list[ChordEvent] = field(repr=False)     # analyzer calls, in onset order
+    not_analyzed: list[Note] = field(repr=False)     # pitched notes left black, with reason
+
+    @property
+    def pitched(self) -> list[Note]:
+        return [n for n in self.notes if n.step is not None]
+
+    @property
+    def counts(self) -> dict[str, int]:
+        """Pitched notes per color: green, orange, red, black (not analyzed)."""
+        counts = dict.fromkeys(('green', 'orange', 'red', 'black'), 0)
+        for note in self.pitched:
+            counts[note.color] += 1
+        return counts
+
+    def measures_with(self, color: str) -> list[str]:
+        """Measure numbers containing a note of ``color``, in score order, without repeats."""
+        return list(dict.fromkeys(n.measure_number for n in self.pitched if n.color == color))
+
+    @property
+    def red_measures(self) -> list[str]:
+        return self.measures_with('red')
+
+
+@dataclass
+class AnalysisResult:
+    """
+    Everything an analysis produces; nothing is saved. ``outputs`` maps ``'full'``, or each
+    part id in split mode, to the MusicXML file content.
+    """
+
+    source_name: str
+    tuning: tuple[str, ...]
+    num_frets: int
+    outputs: dict[str, bytes] = field(repr=False)
+    reports: list[PartReport]

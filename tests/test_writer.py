@@ -8,22 +8,28 @@ produced the pre-refactor baseline.
 
 import re
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 from lxml import etree
 
-from config.settings import COLOR_CODES
+from config.settings import COLOR_CODES, LABEL_TEXT
 from config.version import __version__
-from conftest import BASELINE_DIR, TESTS_DIR, PartSpec, attributes, make_score, note
+from conftest import BASELINE_DIR, TESTS_DIR, PartSpec, attributes, backup, make_score, note
+from core.analyzer import FingeringAnalysis, Issue, Playability
 from core.fretboard import Fretboard
-from core.playability import analyze_notes
+from core.playability import ChordEvent, analyze_notes
 from core.reader import list_parts, load_score, read_part
 from core.writer import (
     CREDIT_ID,
+    LABEL_ID_PREFIX,
     add_ispog_credit,
+    annotate,
     colorize,
     extract_part,
+    label_text,
+    remove_annotations,
     serialize,
     set_notehead_color,
 )
@@ -318,3 +324,126 @@ def test_extract_part_removes_part_groups(write_score):
 def test_extract_unknown_part(test_poli_path):
     with pytest.raises(ValueError, match="P9"):
         extract_part(load_score(test_poli_path), "P9")
+
+
+# ---------------------------------------------------------------------------
+# Labels
+# ---------------------------------------------------------------------------
+
+SEVEN = [("E", 2), ("A", 2), ("D", 3), ("G", 3), ("B", 3), ("E", 4), ("A", 4)]
+
+
+def _chord(pitches, duration=4, **kwargs):
+    return "".join(note(step, octave, duration, chord=i > 0, **kwargs)
+                   for i, (step, octave) in enumerate(pitches))
+
+
+def _annotated(write_score, measures):
+    tree = load_score(write_score(make_score(measures=measures)))
+    part = list_parts(tree)[0]
+    notes = read_part(part)
+    result = analyze_notes(notes, STANDARD)
+    count = annotate(part.element, result.events)
+    return tree, part, notes, count
+
+
+def _label_elements(tree):
+    return [d for d in tree.iter("direction") if d.get("id", "").startswith(LABEL_ID_PREFIX)]
+
+
+def test_label_goes_before_the_chord_it_describes(write_score, assert_valid):
+    tree, _, notes, count = _annotated(write_score, [
+        attributes() + note("E", 4, 4), _chord(SEVEN)])
+    assert count == 1
+    (label,) = _label_elements(tree)
+    assert label.getnext() is notes[1].element                     # first note of the chord
+    assert label.get("placement") == "above"
+    words = label.find("direction-type/words")
+    assert words.text == "no free string"
+    assert words.get("color") == COLOR_CODES["red"]
+    assert label.find("staff") is None
+    assert_valid(serialize(tree))
+
+
+@pytest.mark.parametrize("grace, main, label", [
+    (("C", 2), [("E", 4)], "out of range"),        # red grace note, green chord
+    (("E", 4), SEVEN, "no free string"),            # green grace note, red chord
+])
+def test_one_label_per_onset_with_the_worst_result(write_score, grace, main, label):
+    # grace notes and the chord they precede are two analyzer events at the same onset
+    tree, _, notes, _ = _annotated(write_score, [
+        attributes() + note(*grace, None, grace=True) + _chord(main)])
+    (element,) = _label_elements(tree)
+    words = element.find("direction-type/words")
+    assert (words.text, words.get("color")) == (label, COLOR_CODES["red"])
+    assert element.getnext() is notes[0].element                  # before the grace note
+
+
+def test_label_never_splits_a_chord(write_score, assert_valid):
+    # the chord starts with a tied continuation (not analyzed again): the label must still
+    # go before the chord's first note, not before the first attacked one
+    tree, _, notes, _ = _annotated(write_score, [
+        attributes() + note("E", 2, 4, tie=("start",)),
+        note("E", 2, 4, tie=("stop",))
+        + "".join(note(step, octave, 4, chord=True) for step, octave in SEVEN[1:])])
+    (label,) = _label_elements(tree)
+    continuation = notes[1]
+    assert continuation.tie_stop and label.getnext() is continuation.element
+    assert_valid(serialize(tree))
+
+
+def test_label_on_the_second_staff_names_it(write_score, assert_valid):
+    tree, _, notes, _ = _annotated(write_score, [
+        attributes(staves=2, clefs=(("G", 2), ("F", 4)))
+        + note(None, None, 4, staff=1) + backup(4) + _chord(SEVEN, staff=2, voice=5)])
+    (label,) = _label_elements(tree)
+    assert label.findtext("staff") == "2"
+    assert label.getnext() is notes[1].element
+    assert_valid(serialize(tree))
+
+
+def test_labels_are_replaced_not_duplicated(write_score):
+    tree, part, notes, _ = _annotated(write_score, [attributes() + _chord(SEVEN)])
+    events = analyze_notes(read_part(part), STANDARD).events
+    assert annotate(part.element, events) == 1
+    assert len(_label_elements(tree)) == 1
+    assert remove_annotations(part.element) == 1
+    assert _label_elements(tree) == []
+
+
+def test_playable_score_gets_no_label(write_score):
+    _, _, _, count = _annotated(write_score, [attributes() + note("E", 4, 4)])
+    assert count == 0
+
+
+def test_label_follows_the_source_indentation(test01_path):
+    tree = load_score(test01_path)
+    part = list_parts(tree)[0]
+    annotate(part.element, analyze_notes(read_part(part), STANDARD).events)
+    label = _label_elements(tree)[0]
+    indent = label.tail
+    assert label.getprevious().tail == indent
+    assert label.text == indent + "  "
+    assert label.find("direction-type").text == indent + "    "
+
+
+@pytest.mark.parametrize("issue, fingers, span, expected", [
+    (Issue.FINGERS, 5, 3, "5 fingers"),
+    (Issue.SPAN, 3, 6, "span 6"),
+    (Issue.OUT_OF_RANGE, 0, 0, "out of range"),
+    (Issue.STRINGS, 0, 0, "no free string"),
+    (Issue.CONFLICT, 0, 0, "string conflict"),
+    (Issue.PINKY_BARRE, 3, 2, "pinky barré"),
+    (Issue.STRETCH, 2, 4, "stretch"),
+])
+def test_label_text(issue, fingers, span, expected):
+    analysis = FingeringAnalysis(playability=Playability.UNPLAYABLE, positions=[],
+                                 fingers_used=fingers, has_barre=False, span=span, issue=issue)
+    event = ChordEvent(onset=Fraction(0), measure_number="1", notes=[], held=[],
+                       analysis=analysis)
+    assert label_text(event) == expected
+
+
+def test_every_issue_has_a_label():
+    issues = {v for k, v in vars(Issue).items() if not k.startswith("_") and v}
+    assert issues == set(LABEL_TEXT)

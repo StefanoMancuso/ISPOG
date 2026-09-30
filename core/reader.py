@@ -88,7 +88,7 @@ def load_score(path: StrPath) -> etree._ElementTree:
         tree = etree.parse(io.BytesIO(data), _make_parser())
     except etree.XMLSyntaxError as e:
         raise UnsupportedFileError(
-            f"'{path.name}' is not a valid MusicXML file: {e}."
+            f"'{path.name}' is not a valid MusicXML file ({e.msg})."
         ) from e
 
     root_tag = tree.getroot().tag

@@ -19,19 +19,35 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   and `.mxl` recognized from the content, UTF-16 files, timewise scores (converted with the
   official MusicXML 4.0 stylesheet), multi-part scores with guitar detection, exact onsets
   from `<backup>`, `<forward>`, `<chord/>` and changing `<divisions>`, transposing
-  instruments, TAB staves doubling the notation skipped. Not yet used by the analysis.
+  instruments, TAB staves doubling the notation skipped.
 - MIDI-based fretboard (`core/fretboard.py`) and playability engine (`core/playability.py`):
   notes are fingered onset by onset, with the notes still sounding as constraints, for any
-  number of voices. Not yet used by the application.
+  number of voices.
 - MusicXML writer (`core/writer.py`): noteheads colored in place, schema-valid; credit
   "Analyzed by ISPOG <version>" at the bottom of page 1, replacing earlier ISPOG credits;
   single-part copies of a score; UTF-8 output keeping the original DOCTYPE and layout.
-  Not yet used by the application.
+- Labels in the score: a short italic text (e.g. "span 6", "5 fingers", "no free string")
+  above every difficult or unplayable point, in the color of the point. Replaced, not
+  duplicated, when an analyzed score is analyzed again.
+- Playability report saved next to the score (`<name>_report.txt`): summary per part, then
+  only the difficult and unplayable points with measure, beat, notes, held notes, reason
+  and closest fingering found, then the notes that were not analyzed and why.
+- Summary after the analysis: notes, difficult and unplayable per part, with the measures
+  containing unplayable notes.
+- Technical note list per part (`logs/<name>_<part>_notes.tsv`), for bug reports.
+- Multi-part scores: guitar parts are detected and analyzed; the other parts are left
+  untouched (part selection in the window comes in a later beta).
+- `.xml` files can be opened.
 - Output validated against the MusicXML 4.0 schema in the test suite.
 - `LICENSE`, `THIRD_PARTY_NOTICES.md`, `CITATION.cff`, `README.md`.
 
 ### Changed
-- Playability engine (effective once the application uses it):
+- The analysis runs on the new reader, engine and writer; the 0.9 string-based pipeline
+  is removed.
+- The save dialog opens after the analysis, from the main window; cancelling it no
+  longer loses the analysis silently. The analysis thread no longer touches the window.
+- Error messages say what is wrong with the file instead of "Analysis failed".
+- Playability engine:
   - a tied note is no longer analyzed again where the tie ends: it keeps the color of the
     note that starts the tie and holds its string for the whole tied duration;
   - positions at the edge of the neck follow the real pitch: no fret beyond the last one;

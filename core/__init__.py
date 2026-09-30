@@ -3,14 +3,12 @@
 ISPOG - Core Package
 MusicXML reading, playability analysis and writing. No GUI dependency (plan, D6).
 
-    tree = load_score(path)
-    for part in list_parts(tree):
-        if part.is_guitar:
-            notes = read_part(part)
-            analyze_notes(notes, Fretboard(tuning, num_frets))
-            colorize(notes)
-    add_ispog_credit(tree)
-    data = serialize(tree)
+    result = analyze(AnalysisConfig('score.mxl', tuning=('E4', 'B3', 'G3', 'D3', 'A2', 'E2')))
+    score_bytes = result.outputs['full']
+    report_text = render_report(result)
+
+Building blocks: load_score → list_parts → read_part → analyze_notes → colorize /
+annotate → add_ispog_credit → serialize.
 """
 
 # Errors
@@ -28,10 +26,13 @@ from .analyzer import ChordAnalyzer
 from .playability import analyze_notes, ChordEvent, PlayabilityResult
 
 # Writer
-from .writer import colorize, set_notehead_color, add_ispog_credit, extract_part, serialize
+from .writer import (colorize, set_notehead_color, annotate, remove_annotations,
+                     add_ispog_credit, extract_part, serialize)
 
-# 0.9 pipeline, still used by the GUI; replaced in F5 (processor) and F6 (GUI)
-from .processor import analyze_file, PlayabilityAnalyzer, AnalysisConfig
+# Processor and reports
+from .model import PartReport, AnalysisResult
+from .processor import AnalysisConfig, analyze, select_targets, write_notes_logs
+from .report import render_report, render_notes_tsv
 
 __all__ = [
     # Errors
@@ -56,11 +57,18 @@ __all__ = [
     # Writer
     'colorize',
     'set_notehead_color',
+    'annotate',
+    'remove_annotations',
     'add_ispog_credit',
     'extract_part',
     'serialize',
-    # 0.9 pipeline
-    'analyze_file',
-    'PlayabilityAnalyzer',
+    # Processor and reports
+    'PartReport',
+    'AnalysisResult',
     'AnalysisConfig',
+    'analyze',
+    'select_targets',
+    'write_notes_logs',
+    'render_report',
+    'render_notes_tsv',
 ]
