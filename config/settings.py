@@ -139,6 +139,21 @@ UI_TEXT = {
     'choose_folder': 'Choose a folder for the separate parts',
     'overwrite_title': 'Replace files?',
     'overwrite': 'These files already exist and will be replaced:\n{files}',
+    'report_title': 'Report a problem',
+    'report_intro': ('Send a report to the ISPOG developer. Nothing is sent until you '
+                     'press Send.'),
+    'report_always': 'Always included: log file and system information.',
+    'report_analysis': 'Include last analysis (colored score and report)',
+    'report_score': 'Include score file',
+    'report_email': 'Your e-mail (optional, to be contacted):',
+    'report_comment': 'What were you doing? What did you expect?',
+    'report_send': 'Send',
+    'report_sending': 'Sending…',
+    'report_sent': 'Report sent. Thank you!',
+    'report_failed': ('The report could not be sent:\n{error}\n\nOpen an e-mail with the details '
+                      'instead? The log folder will open too, to attach the log file.'),
+    'report_offer': '{message}\n\nSend a report to the developer?',
+    'report_menu': 'Report a problem…',
     'about_title': 'About ISPOG',
     'about': ('{name}\nVersion {version}\n\n© 2026 Stefano Mancuso\nLicense: {license}\n'
               '{repository}\n\nIf you use ISPOG in research, please cite:\n{citation}'),
@@ -178,6 +193,21 @@ LABEL_TEXT = {
     'pinky_barre': 'pinky barré',
     'stretch': 'stretch',
 }
+
+# ============================================================================
+# BUG REPORTS (core/bugreport.py, server/bugreport.gs)
+# ============================================================================
+
+# Google Apps Script web app that e-mails the report to the maintainer.
+BUGREPORT_URL = ("https://script.google.com/macros/s/"
+                 "AKfycbxCdniXIp1lKOZCMFyS5F98UMhGLptcOIiOC5wMSt6m2hw81lzrR_LYvrPAwFO-tYg/exec")
+# Spam filter shared with the script, not a secret: it ships in the app.
+BUGREPORT_TOKEN = "ispog-c9261c2fe7321e7c"
+# Address of the e-mail fallback when the report cannot be sent.
+BUGREPORT_EMAIL = "stefanomancuso88@gmail.com"
+BUGREPORT_MAX_BYTES = 15 * 1024 * 1024       # zip size; the script refuses larger ones
+BUGREPORT_MAX_LOG_BYTES = 2 * 1024 * 1024    # only the end of a longer log is sent
+BUGREPORT_TIMEOUT = 60                       # seconds
 
 # ============================================================================
 # LOGGING

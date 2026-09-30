@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Union
 
+from config.settings import LOG_DIR
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 """Folder containing ``core/``, ``config/``, ``gui/`` and ``utils/``."""
 
@@ -28,21 +30,51 @@ def resource_path(relative_path: StrPath) -> Path:
     Inside a PyInstaller executable resources are unpacked to ``sys._MEIPASS``;
     otherwise they are resolved from the project root.
     """
-    if hasattr(sys, "_MEIPASS"):
+    if is_frozen():
         return Path(sys._MEIPASS) / relative_path
     return PROJECT_ROOT / relative_path
 
 
+def app_data_dir() -> Path:
+    """
+    Per-user folder of the installed application:
+    Windows ``%APPDATA%\\ISPOG``, macOS ``~/Library/Application Support/ISPOG``,
+    Linux ``$XDG_STATE_HOME/ISPOG`` (default ``~/.local/state/ISPOG``).
+    """
+    home = Path.home()
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = home / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_STATE_HOME") or home / ".local" / "state")
+    return base / APP_DIR_NAME
+
+
+def is_frozen() -> bool:
+    """True inside a PyInstaller executable."""
+    return hasattr(sys, "_MEIPASS")
+
+
 def writable_path(relative_path: StrPath) -> Path:
     """
-    Absolute path of a location the application may write to (logs, reports).
+    Absolute path of a location the application may write to.
 
     Inside a PyInstaller executable the bundle is read-only, so writable data goes to
-    ``%APPDATA%/ISPOG`` (home folder where APPDATA is undefined; macOS is fixed in F6b).
-    Otherwise it is resolved from the project root.
+    ``app_data_dir()``; otherwise it is resolved from the project root.
     """
-    if hasattr(sys, "_MEIPASS"):
-        app_data = Path(os.environ.get("APPDATA", Path.home())) / APP_DIR_NAME
-        app_data.mkdir(parents=True, exist_ok=True)
-        return app_data / relative_path
+    if is_frozen():
+        base = app_data_dir()
+        base.mkdir(parents=True, exist_ok=True)
+        return base / relative_path
     return PROJECT_ROOT / relative_path
+
+
+def log_dir() -> Path:
+    """
+    Folder of the log files: ``logs/`` in the project, or in the executable the usual place
+    of each system (macOS ``~/Library/Logs/ISPOG``, elsewhere ``app_data_dir()/logs``).
+    """
+    if is_frozen() and sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / APP_DIR_NAME
+    return writable_path(LOG_DIR)

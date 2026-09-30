@@ -28,6 +28,15 @@ Builds are not digitally signed: the first launch needs one extra confirmation
 MusicXML (`.musicxml`, `.xml`) and compressed MusicXML (`.mxl`), exported from any
 notation program (MuseScore, Sibelius, Finale, Dorico, Guitar Pro).
 
+## Reporting a problem
+
+"Help → Report a problem…", or the button offered with an error, sends a report to the
+developer. Nothing is sent until you press **Send**. The report always contains the log
+file (with your user folder replaced by `~`) and system information (ISPOG, operating system
+and Python versions, tuning and parts chosen). The last analysis (colored score and report)
+is included unless you untick it; your score only if you tick "Include score file". Your
+e-mail is optional. If the report cannot be sent, ISPOG offers to open an e-mail instead.
+
 ## Development
 
 Requires Python 3.11+.

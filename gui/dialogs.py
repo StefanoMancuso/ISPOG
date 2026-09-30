@@ -4,8 +4,11 @@ ISPOG - Dialogs
 File dialogs of the desktop app. Called only from the Tk main thread.
 """
 
+import os
+import subprocess
+import sys
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Optional
 
 from config.settings import SUPPORTED_FILE_TYPES, UI_TEXT
@@ -38,3 +41,17 @@ def ask_output_dir(initial_dir: Path) -> Optional[Path]:
     path = filedialog.askdirectory(title=UI_TEXT['choose_folder'], initialdir=initial_dir,
                                    mustexist=True)
     return Path(path) if path else None
+
+
+def open_folder(folder: Path) -> None:
+    """Show a folder in the system file manager (Explorer, Finder...)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        if sys.platform == 'win32':
+            os.startfile(folder)
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', str(folder)], check=False)
+        else:
+            subprocess.run(['xdg-open', str(folder)], check=False)
+    except OSError as e:
+        messagebox.showerror(title='Error', message=f'{folder}\n\n{e}')

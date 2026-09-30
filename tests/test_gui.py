@@ -51,7 +51,7 @@ class Stubs:
         self.open: list[Path] = []
         self.save: list[Path] = []
         self.folder: list[Path] = []
-        self.overwrite = True
+        self.answer_yes = True            # answer to every yes/no question
         self.messages: list[tuple[str, str]] = []
 
 
@@ -68,14 +68,14 @@ def app(monkeypatch):
                         lambda name, d: stubs.save.pop(0) if stubs.save else None)
     monkeypatch.setattr(widgets, "ask_output_dir",
                         lambda d: stubs.folder.pop(0) if stubs.folder else None)
-    monkeypatch.setattr(widgets, "writable_path", lambda rel: stubs.logs / rel)
+    monkeypatch.setattr(widgets, "log_dir", lambda: stubs.logs)
     for kind in ("showinfo", "showerror", "showwarning"):
         monkeypatch.setattr(tkinter.messagebox, kind,
                             lambda kind=kind.removeprefix("show"), **k:
                             stubs.messages.append((kind, k["message"])))
     monkeypatch.setattr(tkinter.messagebox, "askyesno",
                         lambda **k: stubs.messages.append(("ask", k["message"]))
-                        or stubs.overwrite)
+                        or stubs.answer_yes)
     yield window, stubs
     window.destroy()
     # Collect the Tk variables of this window now, in the main thread: collected later from
@@ -113,7 +113,7 @@ def test_unreadable_file_is_refused_at_loading(app, tmp_path, test_poli_path):
     bad = tmp_path / "bad.xml"
     bad.write_text("hello")
     _load(window, stubs, bad)
-    assert stubs.messages[-1][0] == "error" and "bad.xml" in stubs.messages[-1][1]
+    assert stubs.messages[-1][0] == "ask" and "bad.xml" in stubs.messages[-1][1]
     assert window.file_selector.get_filepath() is None
     assert window.part_selector.listbox.size() == 0
 
@@ -142,7 +142,7 @@ def test_separate_parts_and_overwrite(app, tmp_path, test_poli_path):
     assert sorted(p.name for p in tmp_path.glob("test_poli*")) == expected
     before = {p: p.stat().st_mtime_ns for p in tmp_path.glob("test_poli*")}
 
-    stubs.overwrite = False
+    stubs.answer_yes = False
     stubs.folder.append(tmp_path)
     _analyze(window)
     assert stubs.messages[-1][0] == "ask"
@@ -227,3 +227,116 @@ def test_drop_is_enabled_when_tkinterdnd2_is_installed(app):
     else:
         assert window.file_selector.drop_enabled
         assert status == "No file loaded: browse or drop a score"
+
+
+# ---------------------------------------------------------------------------
+# Bug reports
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def reports(app, monkeypatch):
+    """Record what the report dialog would send, open in the browser, or show."""
+    from gui import report_dialog
+    sent, opened = [], []
+    monkeypatch.setattr(report_dialog, "webbrowser",
+                        type("Browser", (), {"open": staticmethod(opened.append)}))
+    monkeypatch.setattr(report_dialog, "open_folder", lambda folder: opened.append(folder))
+    return sent, opened
+
+
+def _wait_closed(window, dialog, timeout=10.0):
+    start = time.monotonic()
+    while dialog.winfo_exists():
+        assert time.monotonic() - start < timeout, "report dialog still open"
+        window.update()
+        time.sleep(0.02)
+
+
+def test_report_without_analysis(app, reports, test01_path):
+    window, stubs = app
+    _load(window, stubs, test01_path)
+    dialog = window.open_report()
+    content = dialog.final_content()
+    assert content.summary == "User report" and content.analysis_files == {}
+    assert content.score_file is None                             # score is opt-in
+    assert content.context["score"] == "Test01.musicxml"
+    assert content.context["selected"] == ["P1"]
+    dialog.destroy()
+
+
+def test_report_after_analysis_sends_what_the_tester_chose(app, reports, tmp_path,
+                                                           test01_path):
+    window, stubs = app
+    sent, _ = reports
+    stubs.logs = tmp_path / "logs"
+    _load(window, stubs, test01_path)
+    stubs.save.append(tmp_path / "out.musicxml")
+    _analyze(window)
+
+    dialog = window.open_report()
+    dialog._sender = sent.append
+    assert dialog.include_analysis.get() is True
+    dialog.include_analysis.set(False)
+    assert dialog.final_content().analysis_files == {}
+    dialog.include_analysis.set(True)
+    dialog.include_score.set(True)
+    dialog.email.set("tester@example.org")
+    dialog.comment.insert("1.0", "Measure 1 should be playable")
+    dialog._send()
+    _wait_closed(window, dialog)
+
+    (content,) = sent
+    assert content.email == "tester@example.org"
+    assert content.comment == "Measure 1 should be playable"
+    assert content.score_file == test01_path
+    assert set(content.analysis_files) == {"Test01_ispog.musicxml", "Test01_ispog_report.txt"}
+    assert stubs.messages[-1] == ("info", "Report sent. Thank you!")
+
+
+def test_failed_report_offers_an_email(app, reports, test01_path):
+    from core.errors import ReportNotSentError
+    window, stubs = app
+    _, opened = reports
+    _load(window, stubs, test01_path)
+    dialog = window.open_report()
+
+    def fail(content):
+        raise ReportNotSentError("No connection to the report service (offline).")
+
+    dialog._sender = fail
+    stubs.answer_yes = True                                        # "Open an e-mail?" -> yes
+    dialog._send()
+    _wait_closed(window, dialog)
+    assert stubs.messages[-1][0] == "ask" and "offline" in stubs.messages[-1][1]
+    assert opened[0].startswith("mailto:") and isinstance(opened[1], Path)
+
+
+def test_refused_file_offers_a_report(app, reports, tmp_path, monkeypatch):
+    window, stubs = app
+    opened = []
+    monkeypatch.setattr(window, "open_report", lambda **k: opened.append(k))
+    bad = tmp_path / "bad.xml"
+    bad.write_text("hello")
+
+    stubs.answer_yes = False                                       # "Send a report?" -> no
+    _load(window, stubs, bad)
+    assert opened == [] and "Send a report" in stubs.messages[-1][1]
+
+    stubs.answer_yes = True
+    _load(window, stubs, bad)
+    (call,) = opened
+    assert "bad.xml" in call["summary"] and "UnsupportedFileError" in call["error"]
+
+
+def test_analysis_of_another_score_is_not_offered(app, reports, tmp_path, test01_path,
+                                                  test_poli_path):
+    window, stubs = app
+    stubs.logs = tmp_path / "logs"
+    _load(window, stubs, test01_path)
+    stubs.save.append(tmp_path / "out.musicxml")
+    _analyze(window)
+    _load(window, stubs, test_poli_path)                          # a different score now
+    dialog = window.open_report()
+    assert dialog.final_content().analysis_files == {}
+    assert dialog.include_analysis.get() is False
+    dialog.destroy()

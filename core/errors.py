@@ -19,3 +19,7 @@ class UnsupportedFileError(IspogError):
 
 class NoGuitarPartError(IspogError):
     """The score has no guitar part and no part was selected explicitly."""
+
+
+class ReportNotSentError(IspogError):
+    """A bug report could not be delivered (network, server refusal, size)."""

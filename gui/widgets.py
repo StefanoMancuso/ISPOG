@@ -15,12 +15,12 @@ from tkinter import messagebox, ttk
 from typing import Callable, Optional, Sequence
 
 from config.settings import (
-    DEFAULT_NUM_FRETS, DEFAULT_NUM_STRINGS, LOG_DIR, MAX_FRETS, MAX_NAME_CHARS, MAX_STRINGS,
+    DEFAULT_NUM_FRETS, DEFAULT_NUM_STRINGS, MAX_FRETS, MAX_NAME_CHARS, MAX_STRINGS,
     MIN_FRETS, MIN_STRINGS, NOTE_LIST, STANDARD_TUNING_INDICES, TUNING_PRESETS, UI_TEXT
 )
 from core import (AnalysisConfig, AnalysisResult, IspogError, PartInfo, PartReport, analyze,
                   render_report, write_notes_logs)
-from utils.io import writable_path
+from utils.io import log_dir
 from utils.logger import current_log_file, get_logger
 from .dialogs import ask_open_file, ask_output_dir, ask_save_file
 from .dnd import enable_file_drop
@@ -154,6 +154,11 @@ class PartSelectorWidget(ttk.LabelFrame):
     def clear(self) -> None:
         self.set_parts([])
         self.status_text.set('')
+
+    @property
+    def parts(self) -> list[PartInfo]:
+        """All parts of the loaded score, in score order."""
+        return list(self._parts)
 
     def selected_parts(self) -> list[PartInfo]:
         return [self._parts[i] for i in self.listbox.curselection()]
@@ -318,6 +323,7 @@ class ProcessButton(ttk.Frame):
         file_selector: FileSelectorWidget,
         tuning_widget: TuningWidget,
         part_selector: PartSelectorWidget,
+        on_error: Optional[Callable[[str, Exception], None]] = None,
         *args,
         **kwargs
     ):
@@ -326,6 +332,9 @@ class ProcessButton(ttk.Frame):
         self.file_selector = file_selector
         self.tuning_widget = tuning_widget
         self.part_selector = part_selector
+        self._on_error = on_error                    # e.g. offer to send a bug report
+        self.last_config: Optional[AnalysisConfig] = None
+        self.last_result: Optional[AnalysisResult] = None
 
         self.run_button = ttk.Button(self, text='Analyze Playability', command=self._run_analysis)
         self.run_button.grid(row=0, column=0, pady=4)
@@ -409,8 +418,14 @@ class ProcessButton(ttk.Frame):
         self._set_busy(False)
 
         if error is not None:
-            messagebox.showerror(title='Error', message=self._error_message(error))
-        elif config.output_mode == 'split':
+            if self._on_error is not None:
+                self._on_error(self._error_message(error), error)
+            else:
+                messagebox.showerror(title='Error', message=self._error_message(error))
+            logger.info('=== Analysis finished ===')
+            return
+        self.last_config, self.last_result = config, result
+        if config.output_mode == 'split':
             self._save_split(config, parts, result)
         else:
             self._save_full(config, result)
@@ -450,7 +465,7 @@ class ProcessButton(ttk.Frame):
             for path, data in files.items():
                 path.write_bytes(data)
             report.write_text(render_report(result), encoding='utf-8')
-            write_notes_logs(result, writable_path(LOG_DIR))
+            write_notes_logs(result, log_dir())
         except OSError as e:
             logger.error('Saving failed', exc_info=True)
             messagebox.showerror(title='Error', message=f'Could not save the files:\n{e}')

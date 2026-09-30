@@ -14,6 +14,7 @@ each under its own license.
 | [PyInstaller](https://pyinstaller.org/) bootloader | desktop executables | GPL-2.0-or-later with bootloader exception |
 | [tkinterdnd2](https://github.com/Eliav2/tkinterdnd2) | drag and drop in the desktop app | MIT |
 | [tkDnD](https://github.com/petasis/tkdnd) | native drag and drop library, bundled with tkinterdnd2 | Tcl/Tk-style BSD license |
+| [certifi](https://github.com/certifi/python-certifi) | CA certificates for sending bug reports | MPL-2.0 |
 | [Gradio](https://www.gradio.app/) | web version only, not in the executables | Apache-2.0 |
 
 ## MusicXML 4.0 specification files

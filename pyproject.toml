@@ -17,9 +17,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Desktop app extras: drag and drop of scores onto the window (optional at runtime).
+# Desktop app extras, optional at runtime: drag and drop of scores onto the window;
+# CA certificates for sending bug reports where Python has none (macOS, executables).
 desktop = [
     "tkinterdnd2>=0.4",
+    "certifi>=2024",
 ]
 # Web version (app.py, Render). Pin the tested major in F9.
 web = [
@@ -35,6 +37,7 @@ dev = [
 build = [
     "pyinstaller>=6",
     "tkinterdnd2>=0.4",
+    "certifi>=2024",
 ]
 
 [project.urls]

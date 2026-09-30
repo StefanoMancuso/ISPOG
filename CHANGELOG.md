@@ -47,6 +47,11 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   `tkinterdnd2`; without it the Browse button remains). A score passed on the command line,
   or dropped on the program icon on Windows, is loaded at start-up.
 - `.xml` files can be opened.
+- Bug reports: "Help → Report a problem…" and a "Send a report?" offer with every error
+  send the log, system information and, if the tester agrees, the last analysis and the
+  score, by e-mail to the developer through a Google Apps Script endpoint
+  (`server/bugreport.gs`). Nothing is sent without a click; without network, an e-mail
+  with the details is prepared instead.
 - Output validated against the MusicXML 4.0 schema in the test suite.
 - Corpus tests for real scores from many editors (`tests/test_corpus.py`) and a tool that
   analyzes the whole corpus for a visual check (`tests/tools/corpus_run.py`).
@@ -76,6 +81,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
   released with.
 - Bundled resources, logs and reports are located from the project folder, no longer
   from the folder ISPOG is launched from.
+- Logs of the installed app: `%APPDATA%\ISPOG\logs` (Windows), `~/Library/Logs/ISPOG`
+  (macOS, previously `~/ISPOG/logs`), `~/.local/state/ISPOG/logs` (Linux).
 
 ### Fixed
 - `.mxl` files exported by MuseScore 4 (score stored as `score.xml`) were rejected with

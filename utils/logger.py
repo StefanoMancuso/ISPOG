@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from config import LOG_DIR, LOG_FORMAT, LOG_DATE_FORMAT
-from utils.io import writable_path
+from config import LOG_FORMAT, LOG_DATE_FORMAT
+from utils.io import log_dir as _log_dir
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -38,8 +38,8 @@ def setup_file_logging(level: int = logging.DEBUG) -> Path:
         Path to the log file
     """
     # Create logs directory
-    log_dir = writable_path(LOG_DIR)
-    log_dir.mkdir(exist_ok=True)
+    log_dir = _log_dir()
+    log_dir.mkdir(parents=True, exist_ok=True)
     
     # Generate log filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
