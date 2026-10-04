@@ -1,6 +1,6 @@
 {
-  "ispog": "0.10.0b1.dev0",
-  "frozen": true,
+  "ispog": "0.10.0b2.dev0",
+  "frozen": false,
   "platform": "win32",
   "passed": true,
   "checks": {
@@ -18,7 +18,7 @@
     },
     "log_folder": {
       "ok": true,
-      "detail": "C:\\Users\\stefa\\AppData\\Roaming\\ISPOG\\logs"
+      "detail": "D:\\Documenti\\python\\ISPOG\\software\\logs"
     },
     "certificates": {
       "ok": true,

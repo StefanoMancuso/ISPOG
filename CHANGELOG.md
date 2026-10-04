@@ -6,6 +6,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+## [0.10.0b2] - 2026-10-04
+
 ### Added
 - Fingers of the fretting hand (`core/fingering.py`): every fretted note gets a finger
   (1 index … 4 pinky) and held notes keep string, fret **and finger**. Rules: finger order
@@ -157,6 +159,7 @@ version at <https://ispog.onrender.com>.
   orange (difficult), red (unplayable).
 - Tunings: Standard, Drop D, Open G and custom; 4–8 strings; configurable number of frets.
 
-[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b1...HEAD
+[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b2...HEAD
+[0.10.0b2]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b1...v0.10.0b2
 [0.10.0b1]: https://github.com/StefanoMancuso/ISPOG/compare/v0.9.1...v0.10.0b1
 [0.9.1]: https://github.com/StefanoMancuso/ISPOG/releases/tag/v0.9.1
