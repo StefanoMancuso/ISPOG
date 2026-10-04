@@ -53,6 +53,9 @@ version = { attr = "config.version.__version__" }
 where = ["."]
 include = ["core*", "config*", "utils*", "gui*"]
 
+[tool.setuptools.package-data]
+config = ["*.csv"]          # finger stretch table (core/stretch.py)
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

@@ -435,6 +435,9 @@ def test_label_follows_the_source_indentation(test01_path):
     (Issue.CONFLICT, 0, 0, "string conflict"),
     (Issue.PINKY_BARRE, 3, 2, "pinky barré"),
     (Issue.STRETCH, 2, 4, "stretch"),
+    (Issue.CROSSING, 3, 0, "crossed fingers"),
+    (Issue.FINGER_CONFLICT, 4, 3, "no free finger"),
+    (Issue.NO_SHAPE, 3, 2, "no hand position"),
 ])
 def test_label_text(issue, fingers, span, expected):
     analysis = FingeringAnalysis(playability=Playability.UNPLAYABLE, positions=[],

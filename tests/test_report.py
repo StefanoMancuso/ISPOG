@@ -24,13 +24,14 @@ def test_test01_report(test01_path):
         "File:    Test01.musicxml\n"
         "Tuning:  E4 B3 G3 D3 A2 E2 · 19 frets\n"
         "Date:    2026-09-30 07:45\n"
+        "Fingers: string/fret:finger (1 index, 2 middle, 3 ring, 4 pinky)\n"
         "\n"
         "== Chitarra classica (P1) ==\n"
         "Notes analyzed 44 · playable 36 (82%) · difficult 0 · unplayable 8 · not analyzed 0\n"
         "\n"
         "m. 1, beat 3 1/2 — UNPLAYABLE\n"
         "  Notes:   B2\n"
-        "  Held:    E2 (6/0) B2 (5/2) E3 (4/2) G3 (3/0) B3 (2/0) E4 (1/0)\n"
+        "  Held:    E2 (6/0) B2 (5/2:1) E3 (4/2:2) G3 (3/0) B3 (2/0) E4 (1/0)\n"
         "  Reason:  1 note + 6 held notes on 6 strings\n"
     )
     assert text.count("— UNPLAYABLE") == 3
@@ -45,6 +46,16 @@ def test_closest_fingering_is_listed_low_to_high(write_score):
     assert block == ("m. 1, beat 1 — UNPLAYABLE\n"
                      "  Notes:   E2 F2\n"
                      "  Reason:  string conflict: F2 E2")
+
+
+def test_held_fingers_and_finger_conflict(test_ispog_path):
+    text = _report(test_ispog_path)
+    block = next(b for b in text.split("\n\n") if b.startswith("m. 2, beat 4 1/2"))
+    assert block == ("m. 2, beat 4 1/2 — UNPLAYABLE\n"
+                     "  Notes:   G#2\n"
+                     "  Held:    D4 (3/7:3) F4 (2/6:1) B4 (1/7:4)\n"
+                     "  Reason:  no free finger, held: D4 (3/7:3) F4 (2/6:1) B4 (1/7:4)\n"
+                     "  Closest: 6/4")
 
 
 def test_part_without_problems(test_poli_path):
@@ -66,9 +77,10 @@ def test_grace_notes_and_notes_not_analyzed(write_score):
 def test_notes_tsv(test01_path):
     result = analyze(AnalysisConfig(test01_path, tuning=STANDARD))
     lines = render_notes_tsv(result.reports[0]).splitlines()
-    assert lines[0] == "measure\tbeat\tonset\tpitch\tmidi\tvoice\tstaff\tstring/fret\tcolor\treason"
-    assert lines[1] == "1\t1\t0\trest\t\t1\t1\t\tblack\t"
-    assert lines[2] == "1\t2\t1\tE2\t40\t1\t1\t6/0\tgreen\tplayable"
+    assert lines[0] == ("measure\tbeat\tonset\tpitch\tmidi\tvoice\tstaff\tstring/fret\tfinger"
+                        "\tcolor\treason")
+    assert lines[1] == "1\t1\t0\trest\t\t1\t1\t\t\tblack\t"
+    assert lines[2] == "1\t2\t1\tE2\t40\t1\t1\t6/0\t0\tgreen\tplayable"
 
 
 # ---------------------------------------------------------------------------

@@ -7,8 +7,12 @@ together, and returns the score with each notehead colored:
 | color | meaning |
 |---|---|
 | green | playable |
-| orange | difficult (e.g. pinky barré, maximum stretch) |
+| orange | difficult (e.g. pinky barré, wide stretch, crossed fingers) |
 | red | unplayable |
+
+Each note gets a string, a fret and a finger of the fretting hand; held notes keep theirs.
+How far two fingers can stretch, per pair of fingers and strings, is set in
+`config/finger_stretch.csv` and can be edited in a spreadsheet (format in `core/stretch.py`).
 
 Current release: **0.9.1** (alpha). Version 0.10 (in development) moves to a real XML
 parser, analyzes multi-part scores and adds a readable report. See the

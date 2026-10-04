@@ -13,7 +13,7 @@ from fractions import Fraction
 import pytest
 
 from conftest import BASELINE_DIR, attributes, backup, make_score, note
-from core.analyzer import ChordAnalyzer, FretPosition, Playability
+from core.analyzer import ChordAnalyzer, FretPosition, Issue, Placement, Playability
 from core.fretboard import Fretboard
 from core.model import Note
 from core.playability import analyze_notes
@@ -209,13 +209,96 @@ def _p(*pairs):
     (_p((5, 3), (4, 2), (2, 1)), Playability.PLAYABLE, "playable"),
     (_p((6, 1), (5, 2), (4, 3), (3, 4), (2, 5)), Playability.UNPLAYABLE,
      "requires 5 fingers (max 4)"),
-    (_p((6, 1), (1, 7)), Playability.UNPLAYABLE, "fret span 6 (max 4)"),
-    (_p((1, 7), (2, 7), (3, 5)), Playability.DIFFICULT, "pinky barré on fret 7, strings 1–2"),
-    (_p((6, 1), (1, 5)), Playability.DIFFICULT, "maximum stretch (span 4)"),
+    (_p((6, 1), (1, 7)), Playability.UNPLAYABLE,
+     "fret span 6: fingers 1–4 over 6 frets (max 4)"),
+    (_p((6, 5), (5, 6), (4, 7), (2, 8), (1, 8)), Playability.DIFFICULT,
+     "pinky barré on fret 8, strings 1–2"),
+    (_p((6, 1), (1, 5)), Playability.DIFFICULT, "stretch: fingers 1–4 over 4 frets"),
+    (_p((6, 1), (4, 3), (3, 2), (2, 1), (1, 5)), Playability.DIFFICULT,
+     "stretch: fingers 1–4 over 4 frets; stretch: fingers 2–4 over 3 frets; "
+     "stretch: fingers 3–4 over 2 frets"),
 ])
 def test_fingering_reasons(positions, playability, reason):
-    analysis = ChordAnalyzer()._analyze_fingering(positions)
+    analysis = ChordAnalyzer().analyze_positions(positions)
     assert (analysis.playability, analysis.reason) == (playability, reason)
+
+
+def test_difficulty_of_held_notes_is_named():
+    # pinky barré held on strings 1-2, index attacked on fret 5: the problem is not the C4
+    b4, f_sharp4, c4 = (_note("B", 4, midi=71), _note("F", 4, 1, midi=66),
+                        _note("C", 4, midi=60))
+    for n in (b4, f_sharp4, c4):
+        n.set_fret_pos(STANDARD.positions(n.midi))
+    held = [(b4, Placement(1, 7, 4)), (f_sharp4, Placement(2, 7, 4))]
+    best = ChordAnalyzer(STANDARD).candidates([c4], held)[0]
+    assert best.playability is Playability.DIFFICULT
+    assert best.reason == "pinky barré on fret 7, strings 1–2 (held notes)"
+    assert (best.new_positions, best.new_fingers) == ([FretPosition(3, 5)], [2])
+
+
+# ---------------------------------------------------------------------------
+# test_ISPOG: fingerings checked by hand on the guitar
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def test_ispog():
+    from conftest import FIXTURES_DIR
+    notes = read_part(list_parts(load_score(FIXTURES_DIR / "test_ISPOG.mxl"))[0])
+    return notes, analyze_notes(notes, STANDARD)
+
+
+def _event(result, measure, beat):
+    events = [e for e in result.events
+              if e.measure_number == measure and e.notes[0].beat == Fraction(beat)]
+    assert len(events) == 1
+    return events[0]
+
+
+def test_ispog_barre_chord_with_a_wide_pinky(test_ispog):
+    # m. 1, b. 1: F2 needs 6/1 (index barré), A4 1/5 with the pinky: difficult, not impossible
+    event = _event(test_ispog[1], "1", 1)
+    assert event.analysis.playability is Playability.DIFFICULT
+    assert event.analysis.issue == Issue.STRETCH
+    assert event.analysis.has_barre
+
+
+def test_ispog_earlier_chord_is_fingered_for_what_follows(test_ispog):
+    # m. 2: A3 E4 A4 + A2, then F3 under the held chord. Fingered onset by onset the
+    # first chord took A3 on 3/2 and F3 needed a pinky barré; the whole passage is playable.
+    result = test_ispog[1]
+    first, f3 = _event(result, "2", 1), _event(result, "2", Fraction(3, 2))
+    assert first.analysis.playability is Playability.PLAYABLE
+    assert f3.analysis.playability is Playability.PLAYABLE
+    assert [n.pitch_name for n in f3.held] == ["A4", "E4", "A3"]
+    assert f3.notes[0].finger in (1, 2, 3, 4)
+
+
+def test_ispog_held_fingers_block_the_bass(test_ispog):
+    # m. 2, b. 4 1/2: D4 F4 B4 held with the fingers of b. 4 (E3 included); G#2 6/4 needs
+    # a finger behind the index. The later onset is the unplayable one.
+    result = test_ispog[1]
+    chord, bass = _event(result, "2", 4), _event(result, "2", Fraction(9, 2))
+    assert chord.analysis.playability is Playability.PLAYABLE
+    assert bass.analysis.playability is Playability.UNPLAYABLE
+    assert bass.analysis.issue == Issue.FINGER_CONFLICT
+    assert bass.analysis.reason.startswith("no free finger, held: ")
+    assert [n.color for n in bass.notes] == ["red"]
+
+
+def test_ispog_unchanged_points(test_ispog):
+    result = test_ispog[1]
+    assert _event(result, "2", Fraction(5, 2)).analysis.issue == Issue.SPAN     # C4, span 7
+    assert _event(result, "2", 3).analysis.issue == Issue.SPAN
+    assert _event(result, "3", 1).analysis.issue == Issue.STRINGS
+    assert _event(result, "3", 3).analysis.playability is Playability.PLAYABLE
+
+
+def test_held_notes_keep_their_finger(test_ispog):
+    for event in test_ispog[1].events:
+        held = [(n.fret, n.finger) for n in event.held]
+        fixed = [((p.string, p.fret), f) for p, f in zip(event.analysis.fixed,
+                                                          event.analysis.fingers)]
+        assert held == fixed
 
 
 def _note(step, octave, alter=0, midi=None):
@@ -226,7 +309,7 @@ def _note(step, octave, alter=0, midi=None):
 def test_sort_by_sounding_pitch_uses_alterations():
     # the 0.9 bubble sort ignored alterations: F#3 and F3 kept their order
     f3, f_sharp3, e4 = _note("F", 3, midi=53), _note("F", 3, 1, midi=54), _note("E", 4, midi=64)
-    ordered = ChordAnalyzer()._sort_notes_by_pitch([f3, f_sharp3, e4])
+    ordered = ChordAnalyzer.sort_notes_by_pitch([f3, f_sharp3, e4])
     assert ordered == [e4, f_sharp3, f3]
 
 

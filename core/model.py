@@ -84,6 +84,7 @@ class Note:
     # Analysis state, filled by the playability engine
     fret_pos: list[tuple[int, int]] = field(default_factory=list)
     fret: tuple[int, int] = NO_FRET
+    finger: Optional[int] = None                  # 1 index … 4 pinky, 0 open string
     color: str = DEFAULT_COLOR
     reason: str = ''
     sounding_duration: Optional[Fraction] = None  # duration including tied continuations
@@ -198,6 +199,9 @@ class Note:
 
     def set_fret(self, fret: tuple[int, int]) -> None:
         self.fret = fret
+
+    def set_finger(self, finger: Optional[int]) -> None:
+        self.finger = finger
 
     def get_color(self) -> str:
         return self.color

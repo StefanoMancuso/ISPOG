@@ -1,66 +1,75 @@
 # -*- coding: utf-8 -*-
 """
 ISPOG - Chord Analyzer
-Professional implementation of guitar chord playability analysis.
+Fingerings of the notes attacked at one onset, with the notes still held as constraints.
+
+For every assignment of the attacked notes to free strings, ``core.fingering`` assigns the
+fingers (held notes keep string, fret and finger) and grades the hand shape. The choice
+among the candidates is made by the playability engine over the whole part
+(``core.playability``), not here.
 """
 
-from typing import List, Tuple, Optional, Sequence
-from dataclasses import dataclass, field
-from enum import Enum
-import logging
+from __future__ import annotations
 
+import logging
+from dataclasses import dataclass, field
+from typing import Iterator, List, Optional, Sequence, Tuple
+
+from config.settings import MAX_FINGERS
+
+from .fingering import RANK, HandShape, Issue, Playability, Problem, ShapeSearch, hand_shapes
 from .fretboard import Fretboard
-from .model import Note
+from .model import NO_FRET, Note
+from .stretch import StretchTable, default_table
+
+__all__ = ['ChordAnalyzer', 'FingeringAnalysis', 'FretPosition', 'Issue', 'Placement',
+           'Playability']
 
 logger = logging.getLogger(__name__)
 
 
-class Playability(Enum):
-    """Enum for chord playability status."""
-    PLAYABLE = "green"
-    DIFFICULT = "orange"  # Requires pinky barré or stretch
-    UNPLAYABLE = "red"
-
-
-class Issue:
-    """Machine-readable cause of a result, for short labels (``reason`` is the long text)."""
-    NONE = ""
-    FINGERS = "fingers"            # more than 4 fingers
-    SPAN = "span"                  # fret span too large
-    OUT_OF_RANGE = "out_of_range"  # a note has no position on the neck
-    STRINGS = "strings"            # more notes than strings
-    CONFLICT = "conflict"          # no string assignment (held notes or shared strings)
-    PINKY_BARRE = "pinky_barre"
-    STRETCH = "stretch"            # maximum comfortable span
-
-
-@dataclass
+@dataclass(frozen=True)
 class FretPosition:
-    """Represents a finger position on the fretboard."""
-    string: int  # 1-6 (or more)
-    fret: int    # 0-19 (0 = open string)
-    
+    """A string and a fret (0 = open string)."""
+    string: int
+    fret: int
+
     def is_open(self) -> bool:
-        """Returns True if this is an open string."""
         return self.fret == 0
-    
-    def __hash__(self):
-        return hash((self.string, self.fret))
+
+
+@dataclass(frozen=True)
+class Placement:
+    """Where a held note is played: string, fret and finger (0 = open string)."""
+    string: int
+    fret: int
+    finger: int
 
 
 @dataclass
 class FingeringAnalysis:
-    """Result of fingering analysis for a chord."""
+    """One fingering of the notes attacked at an onset."""
     playability: Playability
-    positions: List[FretPosition]
+    positions: List[FretPosition]        # held notes first (``fixed``), then the attacked ones
     fingers_used: int
     has_barre: bool
     barre_fret: Optional[int] = None
-    span: int = 0  # Fret span (max - min fret, excluding open strings)
-    reason: str = ""  # Why unplayable/difficult
-    issue: str = Issue.NONE  # machine-readable cause, see Issue
-    fixed: List[FretPosition] = field(default_factory=list)  # held notes, first in positions
-    held: List[Note] = field(default_factory=list)  # the notes behind ``fixed``
+    span: int = 0                        # highest - lowest fretted fret
+    reason: str = ""                     # why difficult or unplayable
+    issue: str = Issue.NONE              # machine-readable cause, see Issue
+    fixed: List[FretPosition] = field(default_factory=list)   # positions of the held notes
+    held: List[Note] = field(default_factory=list)            # the notes behind ``fixed``
+    fingers: List[Optional[int]] = field(default_factory=list)  # per position, None: unknown
+    attacked: List[Note] = field(default_factory=list)        # in the order of the positions
+    cost: float = 0.0                    # ergonomic cost of the hand shape
+
+    @property
+    def new_positions(self) -> List[FretPosition]:
+        return self.positions[len(self.fixed):]
+
+    @property
+    def new_fingers(self) -> List[Optional[int]]:
+        return self.fingers[len(self.fixed):]
 
 
 def _count(n: int, noun: str) -> str:
@@ -69,98 +78,225 @@ def _count(n: int, noun: str) -> str:
 
 class ChordAnalyzer:
     """
-    Analyzes guitar chord playability considering:
-    - Maximum 4 fingers (index, middle, ring, pinky)
-    - Barré technique with index finger
-    - Fret span limitations
-    - String conflicts
+    Fingerings of attacked notes given the held ones:
+
+    - every attacked note on a free string;
+    - fingers assigned by ``core.fingering`` (order, barrés, stretch table, crossings);
+    - held notes keep string, fret and finger.
     """
-    
-    MAX_FINGERS = 4
-    MAX_FRET_SPAN = 4  # Maximum comfortable stretch
-    MAX_FRET_SPAN_WITH_OPEN = 5  # Slightly more with open strings
 
-    # Ordering for choosing the best fingering (lower = better)
-    _RANK = {
-        Playability.PLAYABLE: 0,
-        Playability.DIFFICULT: 1,
-        Playability.UNPLAYABLE: 2,
-    }
+    MAX_FINGERS = MAX_FINGERS
 
-    def __init__(self, fretboard: Optional[Fretboard] = None):
+    def __init__(self, fretboard: Optional[Fretboard] = None,
+                 table: Optional[StretchTable] = None):
         """
         Args:
             fretboard: used only to explain why a note has no position
                 (``below the lowest string``, ``above fret 19``).
+            table: stretch limits; the table shipped with ISPOG by default.
         """
         self._fretboard = fretboard
-        logger.debug("ChordAnalyzer initialized")
+        self._table = table or default_table()
+        self._cache: dict[tuple, list[FingeringAnalysis]] = {}
 
-    def analyze_chord(self, new_notes: List[Note],
-                      sustained_notes: Sequence[Note] = ()) -> Optional[FingeringAnalysis]:
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
+    def candidates(self, notes: Sequence[Note],
+                   held: Sequence[tuple[Note, Placement]] = ()) -> List[FingeringAnalysis]:
         """
-        Analyze notes attacked at the current time.
-        Sustained notes act as fixed constraints (string+fret) and are NOT recolored.
-        Sustained notes already UNPLAYABLE (or without fret) do not constrain.
-        
+        Every playable or difficult fingering of ``notes`` (best first) or, if there is
+        none, a single unplayable analysis with the closest fingering and the reason.
+        Empty without pitched notes.
+
         Args:
-            new_notes: Notes starting at the current time
-            sustained_notes: Notes still sounding from previous onsets
-
-        Returns:
-            The chosen fingering (``fixed`` = held notes), or None without attacked notes.
+            notes: notes attacked at the current onset.
+            held: notes still sounding, with the placement they keep.
         """
-        attacked = [n for n in new_notes if n.midi is not None]
+        attacked = self.sort_notes_by_pitch([n for n in notes if n.midi is not None])
         if not attacked:
-            return None
+            return []
+        key = (tuple(map(id, attacked)), tuple((id(n), p) for n, p in held))
+        cached = self._cache.get(key)
+        if cached is None:
+            cached = self._candidates(attacked, list(held))
+            self._cache[key] = cached
+        return cached
 
-        held = [
-            n for n in sustained_notes
-            if n.get_fret() != (-1, -1)
-            and n.get_color() != Playability.UNPLAYABLE.value
-        ]
-        fixed = [FretPosition(*n.get_fret()) for n in held]
+    def analyze_positions(self, positions: Sequence[FretPosition]) -> FingeringAnalysis:
+        """The best fingering of a fixed set of positions (no notes, nothing held)."""
+        pairs = [(p.string, p.fret) for p in positions]
+        search = hand_shapes(pairs, table=self._table)
+        if search.valid:
+            return self._from_shape(list(positions), search.valid[0], fixed=[])
+        return self._unplayable_from_search(list(positions), search, fixed=[])
 
-        sorted_notes = self._sort_notes_by_pitch(attacked)
-        logger.debug(f"Analyzing {len(sorted_notes)} new notes, {len(fixed)} fixed")
+    @staticmethod
+    def apply(analysis: FingeringAnalysis) -> None:
+        """Write string, fret, finger, color and reason of ``analysis`` to its notes."""
+        color = analysis.playability.value
+        positions, fingers = analysis.new_positions, analysis.new_fingers
+        for i, note in enumerate(analysis.attacked):
+            pos = positions[i] if i < len(positions) else None
+            note.set_fret((pos.string, pos.fret) if pos else NO_FRET)
+            note.set_finger(fingers[i] if pos and i < len(fingers) else None)
+            note.set_color(color)
+            note.set_reason(analysis.reason)
 
-        best = self._find_best_fingering(sorted_notes, fixed, held)
-        best.fixed = fixed
-        best.held = held
-        self._apply_colors(sorted_notes, best, offset=len(fixed))
+    @staticmethod
+    def sort_notes_by_pitch(notes: Sequence[Note]) -> List[Note]:
+        """Sort by sounding pitch, highest first; stable for equal pitches."""
+        return sorted(notes, key=lambda n: n.midi, reverse=True)
 
-        logger.debug(f"Chord playability: {best.playability.name}")
-        return best
+    # ------------------------------------------------------------------
+    # Candidates
+    # ------------------------------------------------------------------
 
-    def _find_best_fingering(self, notes: List[Note], fixed: List[FretPosition],
-                             held: Sequence[Note] = ()) -> FingeringAnalysis:
-        """
-        Return first PLAYABLE fingering, else the best ranked one.
-        Resulting positions = fixed + new (in this order).
-        """
-        best: Optional[FingeringAnalysis] = None
+    def _candidates(self, attacked: List[Note],
+                    held: List[tuple[Note, Placement]]) -> List[FingeringAnalysis]:
+        fixed = [FretPosition(p.string, p.fret) for _, p in held]
+        pins = [p.finger for _, p in held]
+        options = list(self._string_options(attacked, {p.string for p in fixed}))
 
-        for option in self._generate_fingering_options(notes, fixed):
-            analysis = self._analyze_fingering(fixed + option)
-            if analysis.playability is Playability.PLAYABLE:
-                return analysis
-            if best is None or self._RANK[analysis.playability] < self._RANK[best.playability]:
-                best = analysis
+        found: list[FingeringAnalysis] = []
+        for option in options:
+            positions = fixed + option
+            search = hand_shapes([(p.string, p.fret) for p in positions],
+                                 pins + [None] * len(option), self._table)
+            for shape in search.valid:
+                found.append(self._from_shape(positions, shape, fixed, held, attacked))
+        if found:
+            found.sort(key=lambda a: (RANK[a.playability], a.cost))
+            return found
 
-        if best is not None:
-            return best
-        reason, issue = self._explain_no_fingering(notes, fixed, held)
+        analysis = self._unplayable(attacked, held, fixed, options)
+        logger.debug('No fingering for %s: %s',
+                     ' '.join(n.pitch_name for n in attacked), analysis.reason)
+        return [analysis]
+
+    @staticmethod
+    def _string_options(notes: List[Note], used: set[int]) -> Iterator[List[FretPosition]]:
+        """Every assignment of the notes to distinct free strings."""
+        current: List[FretPosition] = []
+
+        def recurse(i: int):
+            if i == len(notes):
+                yield list(current)
+                return
+            for string, fret in notes[i].get_fret_pos():
+                if string in used:
+                    continue
+                used.add(string)
+                current.append(FretPosition(string, fret))
+                yield from recurse(i + 1)
+                current.pop()
+                used.discard(string)
+
+        yield from recurse(0)
+
+    def _from_shape(self, positions: List[FretPosition], shape: HandShape,
+                    fixed: List[FretPosition], held: Sequence[tuple[Note, Placement]] = (),
+                    attacked: Sequence[Note] = ()) -> FingeringAnalysis:
+        if shape.playability is Playability.PLAYABLE:
+            reason = 'playable' if shape.fingers_used else 'open strings'
+        else:
+            reason = self._problems_text(shape.problems, len(fixed))
         return FingeringAnalysis(
-            playability=Playability.UNPLAYABLE,
-            positions=[],
-            fingers_used=0,
-            has_barre=False,
-            reason=reason,
-            issue=issue,
-        )
+            playability=shape.playability, positions=positions,
+            fingers_used=shape.fingers_used, has_barre=shape.barre_finger is not None,
+            barre_fret=shape.barre_fret, span=shape.span, reason=reason, issue=shape.issue,
+            fixed=fixed, held=[n for n, _ in held], fingers=list(shape.fingers),
+            attacked=list(attacked), cost=shape.cost)
 
-    def _explain_no_fingering(self, notes: List[Note], fixed: List[FretPosition],
-                              held: Sequence[Note]) -> Tuple[str, str]:
+    # ------------------------------------------------------------------
+    # Unplayable: closest fingering and reason
+    # ------------------------------------------------------------------
+
+    def _unplayable(self, attacked: List[Note], held: List[tuple[Note, Placement]],
+                    fixed: List[FretPosition],
+                    options: List[List[FretPosition]]) -> FingeringAnalysis:
+        pins: List[Optional[int]] = [p.finger for _, p in held]
+        if not options:
+            reason, issue = self._explain_no_strings(attacked, held, fixed)
+            return FingeringAnalysis(playability=Playability.UNPLAYABLE, positions=[],
+                                     fingers_used=0, has_barre=False, reason=reason, issue=issue,
+                                     fixed=fixed, held=[n for n, _ in held],
+                                     attacked=attacked)
+
+        # without pins: is the conflict only with the fingers of the held notes?
+        free = [(option, hand_shapes([(p.string, p.fret) for p in fixed + option],
+                                     table=self._table))
+                for option in options]
+        with_shape = [(option, s.valid[0]) for option, s in free if s.valid]
+        if with_shape:
+            # the new notes would need fingers that the held notes keep: no finger shown
+            option, shape = min(with_shape, key=lambda o: (RANK[o[1].playability], o[1].cost))
+            analysis = self._from_shape(fixed + option, shape, fixed, held, attacked)
+            analysis.playability = Playability.UNPLAYABLE
+            analysis.issue = Issue.FINGER_CONFLICT
+            analysis.reason = self._finger_conflict_text(held)
+            analysis.fingers = pins + [None] * len(option)
+            return analysis
+
+        option, search = min(free, key=lambda o: self._closeness(fixed + o[0], o[1]))
+        analysis = self._unplayable_from_search(fixed + option, search, fixed)
+        analysis.held = [n for n, _ in held]
+        analysis.attacked = attacked
+        if held:
+            # the explanation is geometric; the held notes keep their own fingers
+            analysis.fingers = pins + [None] * len(option)
+        return analysis
+
+    @staticmethod
+    def _closeness(positions: List[FretPosition], search: ShapeSearch) -> tuple:
+        """The closest impossible fingering: the most compact hand, then the smallest excess."""
+        frets = [p.fret for p in positions if p.fret > 0]
+        span = max(frets) - min(frets) if frets else 0
+        if search.invalid:
+            best = search.invalid[0]
+            return (span, 0, best.excess, best.cost)
+        return (span, 1, search.min_fingers, 0.0)
+
+    def _unplayable_from_search(self, positions: List[FretPosition], search: ShapeSearch,
+                                fixed: List[FretPosition]) -> FingeringAnalysis:
+        if search.invalid:
+            shape = search.invalid[0]
+            return FingeringAnalysis(
+                playability=Playability.UNPLAYABLE, positions=positions,
+                fingers_used=shape.fingers_used, has_barre=shape.barre_finger is not None,
+                barre_fret=shape.barre_fret, span=shape.span,
+                reason=f'fret span {shape.span}: '
+                       + self._problems_text(shape.problems[:1], len(fixed)),
+                issue=Issue.SPAN, fixed=fixed, fingers=list(shape.fingers), cost=shape.cost)
+
+        frets = [p.fret for p in positions if p.fret > 0]
+        span = max(frets) - min(frets) if frets else 0
+        needed = search.min_fingers
+        if needed > self.MAX_FINGERS:
+            reason, issue = f'requires {needed} fingers (max {self.MAX_FINGERS})', Issue.FINGERS
+        else:
+            reason = 'no hand position (open string under a barré, or crossed fingers)'
+            issue = Issue.NO_SHAPE
+        return FingeringAnalysis(
+            playability=Playability.UNPLAYABLE, positions=positions, fingers_used=needed,
+            has_barre=False, span=span, reason=reason, issue=issue, fixed=fixed,
+            fingers=[None] * len(positions))
+
+    @staticmethod
+    def _problems_text(problems: Sequence[Problem], held_count: int) -> str:
+        held = frozenset(range(held_count))
+        return '; '.join(p.text + (' (held notes)' if p.indices and p.indices <= held else '')
+                         for p in problems)
+
+    @staticmethod
+    def _finger_conflict_text(held: Sequence[tuple[Note, Placement]]) -> str:
+        fretted = [f'{n.pitch_name} ({p.string}/{p.fret}:{p.finger})'
+                   for n, p in sorted(held, key=lambda h: h[0].midi) if p.finger]
+        return 'no free finger, held: ' + ' '.join(fretted)
+
+    def _explain_no_strings(self, notes: List[Note], held: Sequence[tuple[Note, Placement]],
+                            fixed: List[FretPosition]) -> Tuple[str, str]:
         """Why no string assignment exists for the attacked notes: (reason, issue)."""
         unreachable = [n for n in notes if not n.get_fret_pos()]
         if unreachable:
@@ -177,8 +313,7 @@ class ChordAnalyzer:
                     Issue.STRINGS)
 
         if fixed:
-            held_list = ', '.join(f'{n.pitch_name} ({p.string}/{p.fret})'
-                                  for n, p in zip(held, fixed))
+            held_list = ', '.join(f'{n.pitch_name} ({p.string}/{p.fret})' for n, p in held)
             return f"string conflict with held notes: {held_list}", Issue.CONFLICT
         return "string conflict: " + ' '.join(n.pitch_name for n in notes), Issue.CONFLICT
 
@@ -187,265 +322,3 @@ class ChordAnalyzer:
             return f"{note.pitch_name} out of range"
         detail = self._fretboard.out_of_range_reason(note.midi)
         return f"{note.pitch_name} out of range ({detail})"
-    
-    
-    def _generate_fingering_options(self, notes: List[Note],
-                                    fixed: List[FretPosition]) -> List[List[FretPosition]]:
-        """
-        All string assignments for new notes.
-        Strings held by fixed (sustained) notes are excluded.
-        """
-        options: List[List[FretPosition]] = []
-        used = {p.string for p in fixed}
-        current: List[FretPosition] = []
-
-        def recurse(i: int) -> None:
-            if i == len(notes):
-                options.append(current.copy())
-                return
-            for string, fret in notes[i].get_fret_pos():
-                if string in used:
-                    continue
-                used.add(string)
-                current.append(FretPosition(string, fret))
-                recurse(i + 1)
-                current.pop()
-                used.discard(string)
-
-        recurse(0)
-        logger.debug(f"Generated {len(options)} fingering options")
-        return options
-        
-    
-    def _analyze_fingering(self, positions: List[FretPosition]) -> FingeringAnalysis:
-        """
-        Analyzes a specific fingering to determine playability.
-        
-        This is where the magic happens: counts fingers, detects barré, etc.
-        """
-        if not positions:
-            return FingeringAnalysis(
-                playability=Playability.UNPLAYABLE,
-                positions=[],
-                fingers_used=0,
-                has_barre=False,
-                reason="No positions"
-            )
-        
-        # Separate open strings from fretted notes
-        open_strings = [p for p in positions if p.is_open()]
-        fretted = [p for p in positions if not p.is_open()]
-        
-        if not fretted:
-            # All open strings - always playable!
-            return FingeringAnalysis(
-                playability=Playability.PLAYABLE,
-                positions=positions,
-                fingers_used=0,
-                has_barre=False,
-                span=0,
-                reason="open strings"
-            )
-        
-        # Check for barré
-        barre_info = self._detect_barre(fretted)
-        
-        # Count unique fingers needed
-        fingers_needed = self._count_fingers_needed(fretted, barre_info)
-        
-        # Calculate fret span
-        fret_numbers = [p.fret for p in fretted]
-        span = max(fret_numbers) - min(fret_numbers)
-        
-        # Determine playability
-        playability, reason, issue = self._determine_playability(
-            fingers_needed, span, barre_info, len(open_strings) > 0
-        )
-        
-        return FingeringAnalysis(
-            playability=playability,
-            positions=positions,
-            fingers_used=fingers_needed,
-            has_barre=barre_info['has_barre'],
-            barre_fret=barre_info.get('fret'),
-            span=span,
-            reason=reason,
-            issue=issue,
-        )
-    
-    def _detect_barre(self, fretted_positions: List[FretPosition]) -> dict:
-        """
-        Detects valid barré considering realistic finger limitations.
-        
-        INDEX BARRÉ (lowest fret):
-        - Can cover any combination of strings (contiguous or not)
-        - Most common and versatile
-        
-        PINKY BARRÉ (highest fret):
-        - ONLY valid on strings from 1 to 4 (contiguous, starting from string 1)
-        - All other notes must be on LOWER frets or open strings
-        """
-        if len(fretted_positions) < 2:
-            return {'has_barre': False}
-        
-        # Group positions by fret
-        fret_groups = {}
-        for pos in fretted_positions:
-            if pos.fret not in fret_groups:
-                fret_groups[pos.fret] = []
-            fret_groups[pos.fret].append(pos.string)
-        
-        # Find frets with 2+ notes
-        barre_candidates = {fret: strings for fret, strings in fret_groups.items() 
-                            if len(strings) >= 2}
-        
-        if not barre_candidates:
-            return {'has_barre': False}
-        
-        min_fret = min(pos.fret for pos in fretted_positions)
-        max_fret = max(pos.fret for pos in fretted_positions)
-        
-        # Check for INDEX BARRÉ (lowest fret, no restrictions on string layout)
-        if min_fret in barre_candidates:
-            strings = sorted(barre_candidates[min_fret])
-            logger.debug(f"Index barré detected: fret {min_fret}, strings {strings}")
-            return {
-                'has_barre': True,
-                'fret': min_fret,
-                'type': 'index',
-                'strings': strings,
-                'notes_count': len(strings)
-            }
-        
-        # Check for PINKY BARRÉ (highest fret, strict requirements)
-        if max_fret in barre_candidates:
-            strings = sorted(barre_candidates[max_fret])
-            
-            # Pinky barré requirements:
-            # 1. Must start from string 1 (highest pitched)
-            # 2. Strings must be contiguous
-            # 3. Maximum 4 strings (1-2-3-4)
-            
-            is_valid_pinky = (
-                strings[0] == 1 and  # Starts from string 1
-                len(strings) <= 4 and  # Max 4 strings
-                all(strings[i+1] - strings[i] == 1 for i in range(len(strings) - 1))  # Contiguous
-            )
-            
-            if is_valid_pinky:
-                logger.debug(f"Valid pinky barré: fret {max_fret}, strings {strings}")
-                return {
-                    'has_barre': True,
-                    'fret': max_fret,
-                    'type': 'pinky',
-                    'strings': strings,
-                    'notes_count': len(strings)
-                }
-            else:
-                logger.debug(f"Invalid pinky barré (strings {strings} don't meet requirements)")
-        
-        # No valid barré found
-        logger.debug("No valid barré configuration found")
-        return {'has_barre': False}
-
-    def _count_fingers_needed(self, fretted_positions: List[FretPosition], 
-                              barre_info: dict) -> int:
-        """
-        Counts how many fingers are needed for the fingering.
-        
-        Key logic:
-        - Each unique fret = 1 finger
-        - Barré counts as 1 finger even if covering multiple strings
-        - Maximum 4 fingers available (index, middle, ring, pinky)
-        """
-        if not fretted_positions:
-            return 0
-        
-        # Get unique frets
-        unique_frets = set(pos.fret for pos in fretted_positions)
-        
-        if barre_info['has_barre']:
-            # Barré covers multiple strings but uses only 1 finger
-            # So we count unique frets (barré counts as 1)
-            fingers = len(unique_frets)
-        else:
-            # No barré: each note needs a separate finger
-            fingers = len(fretted_positions)
-        
-        logger.debug(f"Fingers needed: {fingers} (barré: {barre_info['has_barre']})")
-        return fingers
-    
-    def _determine_playability(self, fingers_needed: int, span: int, 
-                               barre_info: dict,
-                               has_open_strings: bool) -> Tuple[Playability, str, str]:
-        """
-        Determines final playability based on all factors.
-        
-        Rules:
-        1. More than 4 fingers → UNPLAYABLE
-        2. Span > 4 without open strings → UNPLAYABLE
-        3. Span > 5 with open strings → UNPLAYABLE
-        4. Pinky barré → DIFFICULT (orange)
-        5. Span = 4 without open → DIFFICULT (orange)
-        6. Otherwise → PLAYABLE (green)
-        """
-        # Rule 1: Too many fingers
-        if fingers_needed > self.MAX_FINGERS:
-            return (
-                Playability.UNPLAYABLE,
-                f"requires {fingers_needed} fingers (max {self.MAX_FINGERS})",
-                Issue.FINGERS,
-            )
-        
-        # Rule 2 & 3: Span too large
-        max_span = self.MAX_FRET_SPAN_WITH_OPEN if has_open_strings else self.MAX_FRET_SPAN
-        if span > max_span:
-            return (
-                Playability.UNPLAYABLE,
-                f"fret span {span} (max {max_span})",
-                Issue.SPAN,
-            )
-        
-        # Rule 4: Pinky barré (difficult)
-        if barre_info.get('type') == 'pinky':
-            strings = barre_info['strings']
-            return (
-                Playability.DIFFICULT,
-                f"pinky barré on fret {barre_info['fret']}, strings {strings[0]}–{strings[-1]}",
-                Issue.PINKY_BARRE,
-            )
-        
-        # Rule 5: Maximum comfortable span
-        if span == self.MAX_FRET_SPAN and not has_open_strings:
-            return (
-                Playability.DIFFICULT,
-                f"maximum stretch (span {span})",
-                Issue.STRETCH,
-            )
-        
-        # All good!
-        return (Playability.PLAYABLE, "playable", Issue.NONE)
-    
-    def _apply_colors(self, notes: List[Note], analysis: FingeringAnalysis,
-                      offset: int = 0) -> None:
-        """
-        Apply color and fret to new notes only.
-        analysis.positions[offset:] map 1:1 to notes.
-        """
-        color = analysis.playability.value
-        positions = analysis.positions[offset:]
-
-        for i, note in enumerate(notes):
-            pos = positions[i] if i < len(positions) else None
-            note.set_fret((pos.string, pos.fret) if pos else (-1, -1))
-            note.set_color(color)
-            note.set_reason(analysis.reason)
-
-        logger.debug(f"Applied color '{color}' to {len(notes)} notes: {analysis.reason}")
-
-    def _sort_notes_by_pitch(self, notes: List[Note]) -> List[Note]:
-        """
-        Sort notes by sounding pitch, highest first. The sort is stable: notes with the
-        same pitch keep their order.
-        """
-        return sorted(notes, key=lambda n: n.midi, reverse=True)

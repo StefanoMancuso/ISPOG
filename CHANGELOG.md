@@ -6,6 +6,38 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+### Added
+- Fingers of the fretting hand (`core/fingering.py`): every fretted note gets a finger
+  (1 index … 4 pinky) and held notes keep string, fret **and finger**. Rules: finger order
+  follows the frets; on one fret the lower finger goes on the lower-pitched string, crossed
+  fingers are difficult on adjacent strings and impossible otherwise; barré only with the
+  index (no open string under it) or the pinky (strings 1–4, difficult).
+- Finger stretch table `config/finger_stretch.csv` (`core/stretch.py`): comfortable and
+  maximum distance in frets per pair of fingers and pair of strings, wider from fret 7,
+  with or without a barré.
+- Report: fingers in the positions (`string/fret:finger`); TSV note list: `finger` column.
+- New reasons and labels: "no free finger" (the held notes keep the fingers a new note
+  needs), "crossed fingers", "no hand position"; a difficulty caused only by held notes says
+  "(held notes)".
+- Fixture `tests/fixtures/test_ISPOG.mxl` with the cases checked by hand on the guitar.
+
+### Changed
+- The fingering of a part is chosen over all its onsets (beam search), not onset by onset:
+  a chord may take a fingering that is not its own best when that leaves the hand free for
+  the notes that follow. At equal counts, the unplayable point is the later one.
+- Stretch: the fixed limit (span 4 difficult, 5 with open strings) is replaced by the table,
+  checked for every pair of fingers.
+
+### Fixed
+- A note attacked under a held chord was marked "pinky barré" because the chord had been
+  fingered without looking ahead (test_ISPOG m. 2).
+- A bass note needing a finger already holding another note was marked playable
+  (test_ISPOG m. 2, beat 4 1/2).
+
+### Removed
+- `ChordAnalyzer.analyze_chord` and `_analyze_fingering` (replaced by `candidates` and
+  `analyze_positions`); `MAX_FRET_SPAN` in `config/settings.py`.
+
 ## [0.10.0b1] - 2026-09-30
 
 ### Added

@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 ISPOG - Playability engine
-Walks the notes of one part in time order and asks ChordAnalyzer to finger each onset.
+Walks the notes of one part in time order and chooses a fingering for every onset.
 
 At every onset the attacked notes are fingered together, with the notes still sounding
-from earlier onsets as fixed constraints (string and fret already taken). Voices play no
-role (plan, D4): only onsets and durations do. Tied continuations are not new attacks:
-they extend the sounding duration of the note that starts the tie and inherit its result.
+from earlier onsets as fixed constraints: string, fret and finger already taken. Voices
+play no role (plan, D4): only onsets and durations do. Tied continuations are not new
+attacks: they extend the sounding duration of the note that starts the tie and inherit its
+result.
+
+The choice is not made onset by onset: a beam search keeps the best ``BEAM_WIDTH`` partial
+fingerings of the part and the final choice is traced back from the best complete one. A
+chord can thus take a fingering that is not its own best when that leaves the hand free for
+what follows. Fingerings are compared by unplayable notes, then difficult notes, then
+(at equal counts) unplayable notes as late as possible, then ergonomic cost: hand shape and
+movement along the neck.
 """
 
 from __future__ import annotations
@@ -17,7 +25,9 @@ from fractions import Fraction
 from itertools import groupby
 from typing import Optional
 
-from .analyzer import ChordAnalyzer, FingeringAnalysis
+from config.settings import BEAM_CANDIDATES, BEAM_WIDTH, POSITION_SHIFT_COST
+
+from .analyzer import ChordAnalyzer, FingeringAnalysis, Placement, Playability
 from .fretboard import Fretboard
 from .model import Note
 
@@ -26,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChordEvent:
-    """One call to the analyzer: what was attacked, what was held, and the outcome."""
+    """One fingered onset: what was attacked, what was held, and the outcome."""
 
     onset: Fraction
     measure_number: str
@@ -51,7 +61,7 @@ def is_analyzable(note: Note) -> bool:
 
 def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
     """
-    Color every analyzable note of one part (``color``, ``fret``, ``reason``).
+    Color every analyzable note of one part (``color``, ``fret``, ``finger``, ``reason``).
 
     ``notes`` is the output of ``reader.read_part``. Notes that cannot be analyzed keep
     the color ``black`` and are listed in ``PlayabilityResult.not_analyzed``, with the
@@ -71,21 +81,16 @@ def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
     ordered = sorted(candidates, key=lambda n: n.onset)       # stable: document order kept
     heads, continuations = _link_ties(ordered)
 
-    analyzer = ChordAnalyzer(fretboard)
-    active: list[tuple[Fraction, Note]] = []                  # (end, note) still sounding
-
+    search = _BeamSearch(ChordAnalyzer(fretboard))
     for onset, group in groupby(heads, key=lambda n: n.onset):
-        group = list(group)
-        active = [(end, n) for end, n in active if end > onset]
-        sustained = [n for _, n in active]
+        search.step(onset, list(group))
 
-        for grace_chord in _grace_chords(n for n in group if n.is_grace):
-            _analyze(analyzer, result, onset, grace_chord, sustained, grace=True)
-
-        attacks = [n for n in group if not n.is_grace]
-        if attacks:
-            _analyze(analyzer, result, onset, attacks, sustained)
-            active += [(n.onset + n.sounding_duration, n) for n in attacks]
+    for choice in search.best_choices():
+        ChordAnalyzer.apply(choice.analysis)
+        result.events.append(ChordEvent(onset=choice.onset,
+                                        measure_number=choice.notes[0].measure_number,
+                                        notes=choice.notes, held=choice.analysis.held,
+                                        analysis=choice.analysis, grace=choice.grace))
 
     _propagate_tie_results(continuations)
     logger.info('Analyzed %d notes in %d events (%d tied continuations, %d not analyzed)',
@@ -94,14 +99,123 @@ def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
     return result
 
 
-def _analyze(analyzer: ChordAnalyzer, result: PlayabilityResult, onset: Fraction,
-             notes: list[Note], sustained: list[Note], grace: bool = False) -> None:
-    analysis = analyzer.analyze_chord(notes, sustained)
-    if analysis is None:
-        return
-    result.events.append(ChordEvent(onset=onset, measure_number=notes[0].measure_number,
-                                    notes=notes, held=analysis.held, analysis=analysis,
-                                    grace=grace))
+# ---------------------------------------------------------------------------
+# Beam search over the onsets
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _Choice:
+    onset: Fraction
+    notes: list[Note]
+    analysis: FingeringAnalysis
+    grace: bool = False
+
+
+# (unplayable notes, difficult notes, earliness of unplayable events, ergonomic cost)
+_Cost = tuple[int, int, int, float]
+
+
+@dataclass(frozen=True)
+class _Path:
+    """A partial fingering of the part: the last onset's choices and a link to the rest."""
+
+    cost: _Cost
+    state: tuple[tuple[Note, Placement], ...]        # held notes that constrain
+    position: Optional[int]                          # lowest fretted fret of the hand
+    parent: Optional[_Path] = None
+    choices: tuple[_Choice, ...] = ()
+
+
+class _BeamSearch:
+    def __init__(self, analyzer: ChordAnalyzer):
+        self._analyzer = analyzer
+        self._paths = [_Path(cost=(0, 0, 0, 0.0), state=(), position=None)]
+        self._active: list[tuple[Fraction, Note]] = []        # (end, note) still sounding
+        self._index = 0                                        # onsets seen
+
+    def step(self, onset: Fraction, group: list[Note]) -> None:
+        """Extend every path with the notes attacked at ``onset``."""
+        self._active = [(end, n) for end, n in self._active if end > onset]
+        sounding = {n for _, n in self._active}
+        self._index += 1
+
+        graces = _grace_chords(n for n in group if n.is_grace)
+        attacks = [n for n in group if not n.is_grace]
+
+        extended: list[_Path] = []
+        for path in self._merged(sounding):
+            cost, choices = path.cost, []
+            held = list(path.state)
+            for chord in graces:                  # fingered alone: they do not constrain
+                options = self._analyzer.candidates(chord, held)
+                if options:
+                    cost = self._add(cost, options[0], len(chord))
+                    choices.append(_Choice(onset, chord, options[0], grace=True))
+            if not attacks:
+                extended.append(_Path(cost, path.state, path.position, path, tuple(choices)))
+                continue
+            for option in self._analyzer.candidates(attacks, held)[:BEAM_CANDIDATES]:
+                extended.append(_Path(
+                    cost=self._add(cost, option, len(attacks), path.position),
+                    state=path.state + self._placements(option),
+                    position=_hand_position(option, path.position),
+                    parent=path,
+                    choices=tuple(choices) + (_Choice(onset, attacks, option),)))
+
+        extended.sort(key=lambda p: p.cost)
+        self._paths = extended[:BEAM_WIDTH]
+        if attacks:
+            self._active += [(n.onset + n.sounding_duration, n) for n in attacks]
+
+    def best_choices(self) -> list[_Choice]:
+        """The choices of the best complete path, in onset order."""
+        path: Optional[_Path] = min(self._paths, key=lambda p: p.cost)
+        chain: list[tuple[_Choice, ...]] = []
+        while path is not None:
+            chain.append(path.choices)
+            path = path.parent
+        return [choice for choices in reversed(chain) for choice in choices]
+
+    def _merged(self, sounding: set[Note]) -> list[_Path]:
+        """Drop released notes from the states; equal states keep only their best path."""
+        best: dict[tuple, _Path] = {}
+        for path in self._paths:
+            state = tuple((n, p) for n, p in path.state if n in sounding)
+            key = (frozenset(state), path.position)
+            if key not in best or path.cost < best[key].cost:
+                best[key] = _Path(path.cost, state, path.position, path.parent, path.choices)
+        return sorted(best.values(), key=lambda p: p.cost)
+
+    def _add(self, cost: _Cost, analysis: FingeringAnalysis, count: int,
+             position: Optional[int] = None) -> _Cost:
+        red, orange, earliness, ergonomic = cost
+        if analysis.playability is Playability.UNPLAYABLE:
+            red += count
+            earliness -= self._index
+        elif analysis.playability is Playability.DIFFICULT:
+            orange += count
+        ergonomic += analysis.cost
+        new_position = _hand_position(analysis, None)
+        if position is not None and new_position is not None:
+            ergonomic += POSITION_SHIFT_COST * abs(new_position - position)
+        return red, orange, earliness, ergonomic
+
+    @staticmethod
+    def _placements(analysis: FingeringAnalysis) -> tuple[tuple[Note, Placement], ...]:
+        """Placements of the attacked notes; unplayable notes do not constrain."""
+        if analysis.playability is Playability.UNPLAYABLE:
+            return ()
+        return tuple((note, Placement(pos.string, pos.fret, finger or 0))
+                     for note, pos, finger in zip(analysis.attacked, analysis.new_positions,
+                                                  analysis.new_fingers))
+
+
+def _hand_position(analysis: FingeringAnalysis, previous: Optional[int]) -> Optional[int]:
+    """Lowest fretted fret of a playable fingering; the previous one otherwise."""
+    if analysis.playability is Playability.UNPLAYABLE:
+        return previous
+    frets = [p.fret for p in analysis.positions if p.fret > 0]
+    return min(frets) if frets else previous
 
 
 def _grace_chords(graces) -> list[list[Note]]:
@@ -173,8 +287,9 @@ def _close(head: Note, by_voice: dict[tuple, Note], by_pitch: dict[tuple, Note])
 
 
 def _propagate_tie_results(continuations: dict[Note, Note]) -> None:
-    """Tied continuations take the color, string, fret and reason of their head."""
+    """Tied continuations take the color, string, fret, finger and reason of their head."""
     for note, head in continuations.items():
         note.set_color(head.color)
         note.set_fret(head.fret)
+        note.set_finger(head.finger)
         note.set_reason(head.reason)

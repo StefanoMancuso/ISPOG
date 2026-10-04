@@ -20,7 +20,7 @@ from .model import AnalysisResult, Note, PartReport
 from .playability import ChordEvent
 
 _STATUS = {Playability.DIFFICULT: T['difficult'], Playability.UNPLAYABLE: T['unplayable']}
-_LABEL_WIDTH = 8                    # longest label: 'Closest:'
+_LABEL_WIDTH = 8                    # longest labels: 'Closest:', 'Fingers:'
 
 
 def render_report(result: AnalysisResult, now: Optional[datetime] = None) -> str:
@@ -36,6 +36,7 @@ def render_report(result: AnalysisResult, now: Optional[datetime] = None) -> str
         _field(T['tuning'], T['tuning_value'].format(tuning=' '.join(result.tuning),
                                                      frets=result.num_frets)),
         _field(T['date'], now.strftime('%Y-%m-%d %H:%M')),
+        _field(T['positions'], T['positions_value']),
     ]
     for report in result.reports:
         lines += ['', *_part_section(report)]
@@ -92,7 +93,8 @@ def _event_block(event: ChordEvent) -> list[str]:
         _field(T['notes'], ' '.join(n.pitch_name for n in notes), indent=2),
     ]
     if event.held:
-        held = ' '.join(f'{n.pitch_name} ({_position(n)})' for n in event.held)
+        held = ' '.join(f'{n.pitch_name} ({_position(n)})'
+                        for n in sorted(event.held, key=lambda n: n.midi))
         block.append(_field(T['held'], held, indent=2))
     block.append(_field(T['reason'], analysis.reason, indent=2))
     if any(n.fret != (-1, -1) for n in notes):
@@ -100,10 +102,14 @@ def _event_block(event: ChordEvent) -> list[str]:
     return block
 
 
-def _position(note: Note) -> str:
-    """``string/fret``, or ``-`` without a position."""
+def _position(note: Note, finger: bool = True) -> str:
+    """``string/fret:finger`` (finger only on fretted notes), or ``-`` without a position."""
     string, fret = note.fret
-    return f'{string}/{fret}' if string > 0 else '-'
+    if string <= 0:
+        return '-'
+    if finger and fret > 0 and note.finger:
+        return f'{string}/{fret}:{note.finger}'
+    return f'{string}/{fret}'
 
 
 def _field(label: str, value: str, indent: int = 0) -> str:
@@ -116,7 +122,7 @@ def _field(label: str, value: str, indent: int = 0) -> str:
 # ---------------------------------------------------------------------------
 
 NOTES_TSV_FIELDS = ('measure', 'beat', 'onset', 'pitch', 'midi', 'voice', 'staff',
-                    'string/fret', 'color', 'reason')
+                    'string/fret', 'finger', 'color', 'reason')
 
 
 def render_notes_tsv(report: PartReport) -> str:
@@ -127,5 +133,6 @@ def render_notes_tsv(report: PartReport) -> str:
     for n in report.notes:
         writer.writerow([n.measure_number, n.beat_label, n.onset, n.pitch_name,
                          '' if n.midi is None else n.midi, n.voice, n.staff,
-                         _position(n) if n.step is not None else '', n.color, n.reason])
+                         _position(n, finger=False) if n.step is not None else '',
+                         '' if n.finger is None else n.finger, n.color, n.reason])
     return buffer.getvalue()

@@ -16,6 +16,8 @@ deprecated on macOS). Linux builds a folder, for local checks only.
 - gradio is excluded: the web app (app.py) is not part of the desktop build.
 - macOS: no argv emulation. Files dropped on the app icon arrive as Apple events, which Tk
   passes to MainWindow.open_documents, also while the app is running.
+- Data files: resources/timepart.xsl (timewise scores), config/finger_stretch.csv (finger
+  stretch table); the self-test analysis needs both.
 - Icons, if present: resources/ispog.ico (Windows), resources/ispog.icns (macOS).
 """
 
@@ -72,6 +74,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('resources/timepart.xsl', 'resources'),
+        ('config/finger_stretch.csv', 'config'),     # core/stretch.py
         ('LICENSE', '.'),
         ('THIRD_PARTY_NOTICES.md', '.'),
     ],

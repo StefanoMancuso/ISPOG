@@ -35,8 +35,16 @@ MAX_FRETS = 24
 MIN_STRINGS = 4
 MAX_STRINGS = 8
 
-# Fret span for playability (maximum stretch)
-MAX_FRET_SPAN = 4
+# Fretting hand (core/stretch.py, core/fingering.py)
+MAX_FINGERS = 4                          # index, middle, ring, pinky
+STRETCH_TABLE_FILE = 'finger_stretch.csv'   # in config/: stretch limits per pair of fingers
+HIGH_POSITION_FRET = 7                   # from this fret the '>7' rows of the table apply
+PINKY_BARRE_MAX_STRINGS = 4              # pinky barré: strings 1 to 4 at most
+
+# Playability engine (core/playability.py): beam search over the onsets of a part
+BEAM_WIDTH = 64                          # partial fingerings kept after every onset
+BEAM_CANDIDATES = 24                     # fingerings tried per onset and partial fingering
+POSITION_SHIFT_COST = 0.2                # ergonomic cost of moving the hand by one fret
 
 # ============================================================================
 # TUNING PRESETS
@@ -164,6 +172,8 @@ REPORT_TEXT = {
     'tuning': 'Tuning:',
     'tuning_value': '{tuning} · {frets} frets',
     'date': 'Date:',
+    'positions': 'Fingers:',
+    'positions_value': 'string/fret:finger (1 index, 2 middle, 3 ring, 4 pinky)',
     'part': '== {name} ({part_id}) ==',
     'summary': ('Notes analyzed {analyzed} · playable {green} ({percent}%) · difficult {orange}'
                 ' · unplayable {red} · not analyzed {black}'),
@@ -191,8 +201,11 @@ LABEL_TEXT = {
     'out_of_range': 'out of range',
     'strings': 'no free string',
     'conflict': 'string conflict',
+    'finger_conflict': 'no free finger',
+    'no_shape': 'no hand position',
     'pinky_barre': 'pinky barré',
     'stretch': 'stretch',
+    'crossing': 'crossed fingers',
 }
 
 # ============================================================================

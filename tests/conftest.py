@@ -73,6 +73,12 @@ def test_poli_path() -> Path:
     return FIXTURES_DIR / "test_poli.musicxml"
 
 
+@pytest.fixture
+def test_ispog_path() -> Path:
+    """Three measures (MuseScore, .mxl) checked by hand on the guitar: fingering cases."""
+    return FIXTURES_DIR / "test_ISPOG.mxl"
+
+
 # ---------------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------------
