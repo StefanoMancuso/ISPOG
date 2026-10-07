@@ -6,6 +6,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+## [0.10.0b3] - 2026-10-07
+
 ### Added
 - Unisons across voices (`core/unison.py`). Two voices writing the same pitch at the same
   time are one note written twice (graphic doubling): it is fingered once and both noteheads
@@ -177,7 +179,8 @@ version at <https://ispog.onrender.com>.
   orange (difficult), red (unplayable).
 - Tunings: Standard, Drop D, Open G and custom; 4–8 strings; configurable number of frets.
 
-[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b2...HEAD
+[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b3...HEAD
+[0.10.0b3]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b2...v0.10.0b3
 [0.10.0b2]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b1...v0.10.0b2
 [0.10.0b1]: https://github.com/StefanoMancuso/ISPOG/compare/v0.9.1...v0.10.0b1
 [0.9.1]: https://github.com/StefanoMancuso/ISPOG/releases/tag/v0.9.1
