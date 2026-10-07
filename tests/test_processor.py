@@ -8,6 +8,7 @@ import pytest
 from lxml import etree
 
 from conftest import BASELINE_DIR, TESTS_DIR, PartSpec, attributes, make_score, note
+from config.settings import COLOR_CODES
 from core.errors import NoGuitarPartError, UnsupportedFileError
 from core.processor import (AnalysisConfig, analyze, preselected_part_ids, select_targets,
                             write_notes_logs)
@@ -155,12 +156,15 @@ def test_test01_colors_and_labels(test01_path, tmp_path, assert_valid):
     path.write_bytes(data)
     rows, baseline = extract_colors(path), read_csv(BASELINE_DIR / "Test01_baseline_colors.csv")
     assert [(r["index"], r["pitch"], b["color"], r["color"]) for r, b in zip(rows, baseline)
-            if r["color"] != b["color"]] == [("31", "D3", "red", "green")]      # plan §5.1
+            if r["color"] != b["color"]] == [("23", "B2", "red", "purple"),   # unison
+                                             ("31", "D3", "red", "green")]    # plan §5.1
     labels = _labels(_tree(data))
-    assert [d.findtext("direction-type/words") for d in labels] == ["no free string"] * 3
+    assert [d.findtext("direction-type/words") for d in labels] == [    # document order
+        "no free string", "unison", "no free string"]
+    assert labels[1].find("direction-type/words").get("color") == COLOR_CODES["purple"]
 
     report = result.reports[0]
-    assert report.counts == {"green": 36, "orange": 0, "red": 8, "black": 0}
+    assert report.counts == {"green": 36, "orange": 0, "red": 7, "purple": 1, "black": 0}
     assert report.red_measures == ["1"]
 
 
@@ -198,5 +202,5 @@ def test_microtones_are_listed_not_colored(write_score):
     path = write_score(make_score(measures=[attributes() + note("E", 4, 2, alter=0.5)
                                             + note("E", 4, 2)]))
     report = analyze(_config(path)).reports[0]
-    assert report.counts == {"green": 1, "orange": 0, "red": 0, "black": 1}
+    assert report.counts == {"green": 1, "orange": 0, "red": 0, "purple": 0, "black": 1}
     assert [n.reason for n in report.not_analyzed] == ["microtone not analyzed"]

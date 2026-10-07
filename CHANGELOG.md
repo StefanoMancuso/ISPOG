@@ -6,6 +6,24 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+### Added
+- Unisons across voices (`core/unison.py`). Two voices writing the same pitch at the same
+  time are one note written twice (graphic doubling): it is fingered once and both noteheads
+  take its color. They stay two notes, on two strings, only when the score says so:
+  different string numbers (`<string>`, this decides even with different fingerings),
+  different spelling (E4 / F♭4), or fingerings on both notes with different numbers. Notes
+  of the same voice are always distinct.
+- New color **purple**, "not as written": a note re-attacking a unison that another voice
+  still holds (or a new attack against a tied note) is played as one note on one string.
+  The held note keeps its written end. Unplayable re-attacks stay red. Purple label
+  "unison" in the score, its own section in the report, count in the summaries.
+- `Note.string_mark`, `Note.fingering_mark` (read from `<technical>`), `Note.is_hidden`.
+
+### Changed
+- Hidden notes (`print-object="no"`) are ignored by the analysis: they keep the timing of
+  the measure but are not fingered, colored, counted or listed as not analyzed.
+- Test01 m. 1, beat 3 1/2: B2 re-plucks the B2 of the chord (purple, was red).
+
 ## [0.10.0b2] - 2026-10-04
 
 ### Added

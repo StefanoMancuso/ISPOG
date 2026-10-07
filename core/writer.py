@@ -21,8 +21,8 @@ from lxml import etree
 from config.settings import COLOR_CODES, LABEL_TEXT
 from config.version import __version__
 
-from .analyzer import Playability
-from .model import DEFAULT_COLOR, Note
+from .analyzer import Issue, Playability
+from .model import DEFAULT_COLOR, NOT_AS_WRITTEN_COLOR, Note
 from .playability import ChordEvent
 
 logger = logging.getLogger(__name__)
@@ -108,10 +108,12 @@ def remove_annotations(part_element: etree._Element) -> int:
     return len(labels)
 
 
-def annotate(part_element: etree._Element, events: Iterable[ChordEvent]) -> int:
+def annotate(part_element: etree._Element, events: Iterable[ChordEvent],
+             unisons: Iterable[Note] = ()) -> int:
     """
     Write a short label (e.g. ``span 6``) above every difficult or unplayable point of a
-    part, in the color of the point: one label per onset, for the worst event there.
+    part, in the color of the point: one label per onset, for the worst event there. Where
+    there is none, a purple ``unison`` marks a note playable only as one note (``unisons``).
 
     The label is a ``<direction>`` placed right before the first note of the onset, so it
     takes that note's position in time; in a chord, before the chord's first note.
@@ -131,17 +133,24 @@ def annotate(part_element: etree._Element, events: Iterable[ChordEvent]) -> int:
                                > _SEVERITY[current.analysis.playability]):
             worst[event.onset] = event
 
+    labels: dict[Fraction, tuple[str, str]] = {
+        onset: (label_text(event), event.analysis.playability.value)
+        for onset, event in worst.items()}
+    for note in unisons:
+        labels.setdefault(note.onset, (LABEL_TEXT[Issue.UNISON], NOT_AS_WRITTEN_COLOR))
+
     part_id = part_element.get('id', '')
-    for index, onset in enumerate(sorted(worst), start=1):
-        event = worst[onset]
+    for index, onset in enumerate(sorted(labels), start=1):
+        text, color = labels[onset]
         first = min((n.element for n in notes_at[onset] if n.element is not None),
                     key=order.__getitem__)
         anchor = _chord_head(first)
-        direction = _label(event, f'{LABEL_ID_PREFIX}{part_id}-{index}', anchor.findtext('staff'))
+        direction = _label(text, color, f'{LABEL_ID_PREFIX}{part_id}-{index}',
+                           anchor.findtext('staff'))
         _insert_child(anchor.getparent(), direction, before=anchor)
         if direction.tail and not direction.tail.strip():
             _pretty(direction, direction.tail)
-    return len(worst)
+    return len(labels)
 
 
 def label_text(event: ChordEvent) -> str:
@@ -150,14 +159,14 @@ def label_text(event: ChordEvent) -> str:
     return template.format(fingers=analysis.fingers_used, span=analysis.span)
 
 
-def _label(event: ChordEvent, label_id: str, staff: Optional[str]) -> etree._Element:
+def _label(text: str, color: str, label_id: str, staff: Optional[str]) -> etree._Element:
     direction = etree.Element('direction', placement='above', id=label_id)
     direction_type = etree.SubElement(direction, 'direction-type')
     words = etree.SubElement(direction_type, 'words')
-    words.text = label_text(event)
+    words.text = text
     words.set('font-style', 'italic')
     words.set('font-size', LABEL_FONT_SIZE)
-    words.set('color', COLOR_CODES[event.analysis.playability.value])
+    words.set('color', COLOR_CODES[color])
     if staff:
         etree.SubElement(direction, 'staff').text = staff
     return direction

@@ -100,6 +100,21 @@ def musicxml_schema() -> etree.XMLSchema:
 
 
 @pytest.fixture(scope="session")
+def schema_violations(musicxml_schema) -> Callable[[bytes | etree._ElementTree], set[str]]:
+    """MusicXML 4.0 schema violations of a score, as messages without line numbers."""
+
+    def _check(score: bytes | etree._ElementTree) -> set[str]:
+        if isinstance(score, bytes):
+            parser = etree.XMLParser(no_network=True, load_dtd=False, resolve_entities=False,
+                                     huge_tree=True)
+            score = etree.parse(io.BytesIO(score), parser)
+        musicxml_schema.validate(score)
+        return {e.message for e in musicxml_schema.error_log}
+
+    return _check
+
+
+@pytest.fixture(scope="session")
 def assert_valid(musicxml_schema) -> Callable[[bytes], None]:
     """Assert that serialized MusicXML validates against the 4.0 schema."""
 
@@ -178,11 +193,15 @@ def note(
     cue: bool = False,
     tie: Sequence[str] = (),
     harmonic: bool = False,
+    string: Optional[int] = None,
+    fingering: Optional[str] = None,
+    hidden: bool = False,
 ) -> str:
     """
     ``<note>`` element. ``step=None`` makes a rest. ``tie`` is a subset of
     ("stop", "start"), written both as <tie> and <notations><tied>.
-    Grace notes have no <duration>: pass ``duration=None``.
+    Grace notes have no <duration>: pass ``duration=None``. ``string`` and ``fingering``
+    are written in <technical>; ``hidden`` sets ``print-object="no"``.
     """
     children = []
     if grace:
@@ -204,11 +223,19 @@ def note(
     if staff is not None:
         children.append(f"<staff>{staff}</staff>")
     notations = [f'<tied type="{kind}"/>' for kind in tie]
+    technical = []
     if harmonic:
-        notations.append("<technical><harmonic><natural/></harmonic></technical>")
+        technical.append("<harmonic><natural/></harmonic>")
+    if fingering is not None:
+        technical.append(f"<fingering>{escape(fingering)}</fingering>")
+    if string is not None:
+        technical.append(f"<string>{string}</string>")
+    if technical:
+        notations.append(f"<technical>{''.join(technical)}</technical>")
     if notations:
         children.append(f"<notations>{''.join(notations)}</notations>")
-    return f"<note>{''.join(children)}</note>"
+    attrs = ' print-object="no"' if hidden else ""
+    return f"<note{attrs}>{''.join(children)}</note>"
 
 
 def backup(duration: int | str) -> str:

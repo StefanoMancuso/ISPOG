@@ -24,6 +24,7 @@ _ACCIDENTALS = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
 
 NO_FRET = (-1, -1)
 DEFAULT_COLOR = 'black'
+NOT_AS_WRITTEN_COLOR = 'purple'     # playable only as one note: unison re-attacked (core.unison)
 
 
 def format_beat(beat: Fraction) -> str:
@@ -78,8 +79,13 @@ class Note:
     is_grace: bool = False
     is_cue: bool = False
     is_harmonic: bool = False
+    is_hidden: bool = False                       # print-object="no": timing only
     tie_start: bool = False
     tie_stop: bool = False
+
+    # Performance marks written in the score (``<technical>``)
+    string_mark: Optional[int] = None             # <string>: 1 = highest string
+    fingering_mark: Optional[str] = None          # <fingering>, as written
 
     # Analysis state, filled by the playability engine
     fret_pos: list[tuple[int, int]] = field(default_factory=list)
@@ -129,13 +135,17 @@ class Note:
             is_grace=el.find('grace') is not None,
             is_cue=el.find('cue') is not None,
             is_harmonic=el.find('notations/technical/harmonic') is not None,
+            is_hidden=el.get('print-object') == 'no',
         )
         note._read_ties(el)
+        note._read_technical(el)
         pitch = el.find('pitch')
         if pitch is not None:
             note._read_pitch(pitch, transpose)
         elif note.is_unpitched:
             note.reason = 'unpitched note'
+        if note.is_hidden and not note.reason:
+            note.reason = 'hidden note (timing only)'
         if note.is_harmonic and not note.reason:
             note.reason = 'harmonic (not supported)'
         return note
@@ -158,6 +168,18 @@ class Note:
             types = {t.get('type') for t in el.iterfind('notations/tied')}
         self.tie_start = bool(types & {'start', 'continue'})
         self.tie_stop = bool(types & {'stop', 'continue'})
+
+    def _read_technical(self, el: etree._Element) -> None:
+        """String number and fingering written in ``<technical>``; malformed values ignored."""
+        string = (el.findtext('notations/technical/string') or '').strip()
+        self.string_mark = int(string) if string.isdigit() else None
+        for fingering in el.iterfind('notations/technical/fingering'):
+            if fingering.get('substitution') == 'yes' or fingering.get('alternate') == 'yes':
+                continue
+            text = (fingering.text or '').strip()
+            if text:
+                self.fingering_mark = text
+                break
 
     # ------------------------------------------------------------------
     # Display
@@ -226,15 +248,20 @@ class PartReport:
     notes: list[Note] = field(repr=False)
     events: list[ChordEvent] = field(repr=False)     # analyzer calls, in onset order
     not_analyzed: list[Note] = field(repr=False)     # pitched notes left black, with reason
+    unisons: list[Note] = field(default_factory=list, repr=False)  # purple: not as written
 
     @property
     def pitched(self) -> list[Note]:
-        return [n for n in self.notes if n.step is not None]
+        """Visible pitched notes: hidden notes only carry timing."""
+        return [n for n in self.notes if n.step is not None and not n.is_hidden]
 
     @property
     def counts(self) -> dict[str, int]:
-        """Pitched notes per color: green, orange, red, black (not analyzed)."""
-        counts = dict.fromkeys(('green', 'orange', 'red', 'black'), 0)
+        """
+        Pitched notes per color: green, orange, red, purple (playable only as one note),
+        black (not analyzed).
+        """
+        counts = dict.fromkeys(('green', 'orange', 'red', NOT_AS_WRITTEN_COLOR, 'black'), 0)
         for note in self.pitched:
             counts[note.color] += 1
         return counts

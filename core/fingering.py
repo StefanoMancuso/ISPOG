@@ -57,6 +57,7 @@ class Issue:
     STRETCH = "stretch"                  # difficult distance between two fingers
     CROSSING = "crossing"                # crossed fingers on the same fret
     NO_SHAPE = "no_shape"                # few enough fingers, but no hand position
+    UNISON = "unison"                    # re-attack of a sounding unison (core.unison, purple)
 
 
 @dataclass(frozen=True)

@@ -147,12 +147,12 @@ def test_test01_written_colors_match_the_analysis(test01_path, tmp_path, assert_
 
 
 def test_test01_written_file_against_the_baseline(test01_path, tmp_path):
-    # same accepted difference as test_playability.EXPECTED_DIFFERENCES (plan §5.1)
+    # same accepted differences as test_playability.EXPECTED_DIFFERENCES
     rows = extract_colors(_write(tmp_path, serialize(_analyze(test01_path))))
     baseline = read_csv(BASELINE_DIR / "Test01_baseline_colors.csv")
     differences = [(r["measure"], r["index"], r["pitch"], b["color"], r["color"])
                    for r, b in zip(rows, baseline, strict=True) if r["color"] != b["color"]]
-    assert differences == [("1", "31", "D3", "red", "green")]
+    assert differences == [("1", "23", "B2", "red", "purple"), ("1", "31", "D3", "red", "green")]
 
 
 def test_the_0_9_output_was_not_schema_valid(musicxml_schema):

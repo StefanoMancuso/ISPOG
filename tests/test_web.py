@@ -58,7 +58,7 @@ def test_web_and_desktop_outputs_are_identical(request, tmp_path, fixture, part_
 def test_summary_is_the_desktop_text(test01_path, tmp_path):
     web = app.run_analysis(test01_path, ["P1"], STANDARD, 19, "full", True, staging_root=tmp_path)
     assert web.summary.endswith(
-        "- Chitarra classica: 44 notes · 0 difficult · 8 unplayable (m. 1)")
+        "- Chitarra classica: 44 notes · 0 difficult · 7 unplayable · 1 not as written (m. 1)")
 
 
 # ---------------------------------------------------------------------------

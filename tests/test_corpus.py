@@ -26,7 +26,7 @@ from core import (AnalysisConfig, AnalysisResult, PartInfo, analyze, list_parts,
 pytestmark = pytest.mark.corpus
 
 STANDARD = ("E4", "B3", "G3", "D3", "A2", "E2")
-ANALYSIS_COLORS = {COLOR_CODES[c] for c in ("green", "orange", "red")}
+ANALYSIS_COLORS = {COLOR_CODES[c] for c in ("green", "orange", "red", "purple")}
 FILES = corpus_files()
 
 
@@ -78,7 +78,7 @@ def test_every_guitar_note_is_colored_or_explained(case):
             if note.color == "black":
                 assert id(note) in left_out and note.reason, f"{where}: {note.pitch_name} black"
             else:
-                assert note.color in ("green", "orange", "red"), where
+                assert note.color in ("green", "orange", "red", "purple"), where
 
 
 def test_report_is_coherent(case):
@@ -90,8 +90,18 @@ def test_report_is_coherent(case):
     assert all(f"({r.part_id}) ==" in text for r in case.result.reports)
 
 
-def test_output_is_valid_musicxml(case, assert_valid):
-    assert_valid(case.result.outputs["full"])
+def _assert_no_new_violations(case: Case, data: bytes, schema_violations) -> None:
+    """
+    The output breaks the schema only where the source already does: some editors export
+    invalid MusicXML (e.g. MuseScore 4, ``cautionary`` on ``<accidental-mark>``) and ISPOG
+    leaves the rest of the score as it is.
+    """
+    new = schema_violations(data) - schema_violations(load_score(case.path))
+    assert not new, "schema violations added by ISPOG:\n" + "\n".join(sorted(new))
+
+
+def test_output_is_valid_musicxml(case, schema_violations):
+    _assert_no_new_violations(case, case.result.outputs["full"], schema_violations)
 
 
 def test_written_colors_match_the_analysis(case):
@@ -103,7 +113,7 @@ def test_written_colors_match_the_analysis(case):
                       if (n.find("notehead") is not None
                           and n.find("notehead").get("color") in ANALYSIS_COLORS))
         counts = report.counts
-        assert colored >= counts["green"] + counts["orange"] + counts["red"]
+        assert colored >= counts["green"] + counts["orange"] + counts["red"] + counts["purple"]
 
 
 def test_other_parts_are_untouched(case):
@@ -117,11 +127,11 @@ def test_other_parts_are_untouched(case):
                 == etree.tostring(original.find(path), method="c14n")), part.part_id
 
 
-def test_separate_parts_are_valid(case, assert_valid):
+def test_separate_parts_are_valid(case, schema_violations):
     split = analyze(AnalysisConfig(case.path, tuning=STANDARD, output_mode="split"))
     assert set(split.outputs) == case.targets
     for data in split.outputs.values():
-        assert_valid(data)
+        _assert_no_new_violations(case, data, schema_violations)
 
 
 def test_analysis_is_idempotent(case, tmp_path):

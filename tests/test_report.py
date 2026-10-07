@@ -27,15 +27,20 @@ def test_test01_report(test01_path):
         "Fingers: string/fret:finger (1 index, 2 middle, 3 ring, 4 pinky)\n"
         "\n"
         "== Chitarra classica (P1) ==\n"
-        "Notes analyzed 44 · playable 36 (82%) · difficult 0 · unplayable 8 · not analyzed 0\n"
+        "Notes analyzed 44 · playable 36 (82%) · difficult 0 · unplayable 7 · not as written 1"
+        " · not analyzed 0\n"
         "\n"
-        "m. 1, beat 3 1/2 — UNPLAYABLE\n"
-        "  Notes:   B2\n"
+        "m. 1, beat 3 3/4 — UNPLAYABLE\n"
+        "  Notes:   C3\n"
         "  Held:    E2 (6/0) B2 (5/2:1) E3 (4/2:2) G3 (3/0) B3 (2/0) E4 (1/0)\n"
         "  Reason:  1 note + 6 held notes on 6 strings\n"
     )
-    assert text.count("— UNPLAYABLE") == 3
+    assert text.count("— UNPLAYABLE") == 2
     assert "DIFFICULT" not in text
+    assert text.endswith(
+        "Not playable as written: unisons played as one note\n"
+        "  m. 1, beat 3 1/2 — B2: re-attacks B2 still sounding in voice 1: "
+        "one note on one string\n")
 
 
 def test_closest_fingering_is_listed_low_to_high(write_score):
@@ -90,7 +95,7 @@ def test_notes_tsv(test01_path):
 def test_summary_line(test01_path, test_poli_path):
     report = analyze(AnalysisConfig(test01_path, tuning=STANDARD)).reports[0]
     assert render_summary(report) == (
-        "Chitarra classica: 44 notes · 0 difficult · 8 unplayable (m. 1)")
+        "Chitarra classica: 44 notes · 0 difficult · 7 unplayable · 1 not as written (m. 1)")
     poli = analyze(AnalysisConfig(test_poli_path, tuning=STANDARD)).reports[0]
     assert render_summary(poli).endswith("0 unplayable")
 

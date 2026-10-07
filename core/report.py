@@ -16,7 +16,7 @@ from config.settings import REPORT_TEXT as T
 from config.version import __version__
 
 from .analyzer import Playability
-from .model import AnalysisResult, Note, PartReport
+from .model import DEFAULT_COLOR, NOT_AS_WRITTEN_COLOR, AnalysisResult, Note, PartReport
 from .playability import ChordEvent
 
 _STATUS = {Playability.DIFFICULT: T['difficult'], Playability.UNPLAYABLE: T['unplayable']}
@@ -27,7 +27,8 @@ def render_report(result: AnalysisResult, now: Optional[datetime] = None) -> str
     """
     Playability report: header, a summary per part, then only the difficult and unplayable
     points in score order (notes attacked, notes held, reason, closest fingering found),
-    then the notes that were not analyzed and why.
+    then the notes playable only as one note (unisons), then the notes that were not
+    analyzed and why.
     """
     now = now or datetime.now()
     lines = [
@@ -56,14 +57,20 @@ def render_summary(report: PartReport, max_measures: int = 8) -> str:
         if len(red_measures) > max_measures:
             shown += ' …'
         where = T['short_summary_where'].format(measures=shown)
-    total = counts['green'] + counts['orange'] + counts['red']
+    total = _analyzed(counts)
+    purple = (T['short_summary_purple'].format(purple=counts[NOT_AS_WRITTEN_COLOR])
+              if counts[NOT_AS_WRITTEN_COLOR] else '')
     return T['short_summary'].format(name=report.name, total=total, orange=counts['orange'],
-                                     red=counts['red'], where=where)
+                                     red=counts['red'], purple=purple, where=where)
+
+
+def _analyzed(counts: dict[str, int]) -> int:
+    return sum(n for color, n in counts.items() if color != DEFAULT_COLOR)
 
 
 def _part_section(report: PartReport) -> list[str]:
     counts = report.counts
-    analyzed = counts['green'] + counts['orange'] + counts['red']
+    analyzed = _analyzed(counts)
     percent = round(100 * counts['green'] / analyzed) if analyzed else 0
     lines = [
         T['part'].format(name=report.name, part_id=report.part_id),
@@ -75,12 +82,16 @@ def _part_section(report: PartReport) -> list[str]:
         lines += ['', T['no_problems']]
     for event in problems:
         lines += ['', *_event_block(event)]
-    if report.not_analyzed:
-        lines += ['', T['not_analyzed']]
-        lines += ['  ' + T['not_analyzed_item'].format(
-            measure=n.measure_number, beat=n.beat_label, pitch=n.pitch_name, reason=n.reason)
-            for n in report.not_analyzed]
+    for title, notes in ((T['unisons'], report.unisons),
+                         (T['not_analyzed'], report.not_analyzed)):
+        if notes:
+            lines += ['', title, *('  ' + _note_item(n) for n in notes)]
     return lines
+
+
+def _note_item(note: Note) -> str:
+    return T['not_analyzed_item'].format(measure=note.measure_number, beat=note.beat_label,
+                                         pitch=note.pitch_name, reason=note.reason)
 
 
 def _event_block(event: ChordEvent) -> list[str]:

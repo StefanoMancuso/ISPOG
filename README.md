@@ -9,6 +9,11 @@ together, and returns the score with each notehead colored:
 | green | playable |
 | orange | difficult (e.g. pinky barré, wide stretch, crossed fingers) |
 | red | unplayable |
+| purple | playable only as one note: a unison re-attacked while the other voice still holds it |
+
+Unisons across voices: two voices writing the same pitch at the same time are read as one
+note written twice, unless the score marks them as two (different string numbers, different
+spelling such as E4/F♭4, or different fingerings on both). Hidden notes are ignored.
 
 Each note gets a string, a fret and a finger of the fretting hand; held notes keep theirs.
 How far two fingers can stretch, per pair of fingers and strings, is set in
@@ -40,6 +45,15 @@ the first time:
 - **Windows** (SmartScreen, "Windows protected your PC"): "More info" → "Run anyway".
 - **macOS** ("ISPOG can't be opened" or "Apple could not verify…"): close the message, open
   System Settings → Privacy & Security, scroll down, "Open Anyway", then confirm.
+
+### Security scan warning on Hugging Face
+
+Hugging Face may mark the macOS `.zip` files as "unsafe" (scanner: Protect AI). This is a
+false positive (under review with Hugging Face): PyInstaller bundles pack the Python libraries, including `pickle`-related
+modules, and the scanner flags them inside the archive. The files are built from this
+repository by the release workflow (`.github/workflows/release.yml`), and each executable
+passes `ISPOG --self-test` before publishing. To verify a download, compare its SHA-256
+with the one shown on the file's page on Hugging Face.
 
 A score can be opened with the Browse button, dropped on the window, or dropped on the
 ISPOG icon (the program file on Windows, the app or its Dock icon on macOS).

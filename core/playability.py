@@ -7,7 +7,9 @@ At every onset the attacked notes are fingered together, with the notes still so
 from earlier onsets as fixed constraints: string, fret and finger already taken. Voices
 play no role (plan, D4): only onsets and durations do. Tied continuations are not new
 attacks: they extend the sounding duration of the note that starts the tie and inherit its
-result.
+result. Unisons across voices are resolved first (``core.unison``): a graphic doubling is
+fingered once, a re-attack of a sounding unison releases it and is marked *not as written*
+(purple). Hidden notes are left out: they only carry timing.
 
 The choice is not made onset by onset: a beam search keeps the best ``BEAM_WIDTH`` partial
 fingerings of the part and the final choice is traced back from the best complete one. A
@@ -23,13 +25,14 @@ import logging
 from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import groupby
-from typing import Optional
+from typing import Mapping, Optional
 
 from config.settings import BEAM_CANDIDATES, BEAM_WIDTH, POSITION_SHIFT_COST
 
 from .analyzer import ChordAnalyzer, FingeringAnalysis, Placement, Playability
 from .fretboard import Fretboard
-from .model import Note
+from .model import NOT_AS_WRITTEN_COLOR, Note
+from .unison import resolve_unisons
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +55,13 @@ class PlayabilityResult:
 
     events: list[ChordEvent] = field(default_factory=list)
     not_analyzed: list[Note] = field(default_factory=list)   # pitched notes left black
+    unisons: list[Note] = field(default_factory=list)        # purple: not as written
 
 
 def is_analyzable(note: Note) -> bool:
-    """Pitched, not a cue note, not a harmonic (harmonics: plan §7)."""
-    return note.midi is not None and not (note.is_rest or note.is_cue or note.is_harmonic)
+    """Pitched, visible, not a cue note, not a harmonic (harmonics: plan §7)."""
+    return note.midi is not None and not (note.is_rest or note.is_cue or note.is_harmonic
+                                          or note.is_hidden)
 
 
 def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
@@ -65,7 +70,8 @@ def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
 
     ``notes`` is the output of ``reader.read_part``. Notes that cannot be analyzed keep
     the color ``black`` and are listed in ``PlayabilityResult.not_analyzed``, with the
-    reason set by the reader (microtone, harmonic...) or ``cue note``.
+    reason set by the reader (microtone, harmonic...) or ``cue note``. Hidden notes stay
+    black and are not listed.
     """
     result = PlayabilityResult()
     candidates = []
@@ -73,16 +79,17 @@ def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
         if is_analyzable(note):
             note.set_fret_pos(fretboard.positions(note.midi))
             candidates.append(note)
-        elif not note.is_rest and not note.is_unpitched:
+        elif not (note.is_rest or note.is_unpitched or note.is_hidden):
             if note.is_cue and not note.reason:
                 note.reason = 'cue note'
             result.not_analyzed.append(note)
 
     ordered = sorted(candidates, key=lambda n: n.onset)       # stable: document order kept
     heads, continuations = _link_ties(ordered)
+    unisons = resolve_unisons(heads)
 
-    search = _BeamSearch(ChordAnalyzer(fretboard))
-    for onset, group in groupby(heads, key=lambda n: n.onset):
+    search = _BeamSearch(ChordAnalyzer(fretboard), unisons.ends)
+    for onset, group in groupby(unisons.heads, key=lambda n: n.onset):
         search.step(onset, list(group))
 
     for choice in search.best_choices():
@@ -92,7 +99,9 @@ def analyze_notes(notes: list[Note], fretboard: Fretboard) -> PlayabilityResult:
                                         notes=choice.notes, held=choice.analysis.held,
                                         analysis=choice.analysis, grace=choice.grace))
 
-    _propagate_tie_results(continuations)
+    result.unisons = _mark_reattacks(unisons.reattacks)
+    _propagate_results(unisons.merged)
+    _propagate_results(continuations)
     logger.info('Analyzed %d notes in %d events (%d tied continuations, %d not analyzed)',
                 len(candidates), len(result.events), len(continuations),
                 len(result.not_analyzed))
@@ -127,8 +136,10 @@ class _Path:
 
 
 class _BeamSearch:
-    def __init__(self, analyzer: ChordAnalyzer):
+    def __init__(self, analyzer: ChordAnalyzer,
+                 ends: Optional[Mapping[Note, Fraction]] = None):
         self._analyzer = analyzer
+        self._ends = ends or {}                                # overrides of the sounding end
         self._paths = [_Path(cost=(0, 0, 0, 0.0), state=(), position=None)]
         self._active: list[tuple[Fraction, Note]] = []        # (end, note) still sounding
         self._index = 0                                        # onsets seen
@@ -165,7 +176,8 @@ class _BeamSearch:
         extended.sort(key=lambda p: p.cost)
         self._paths = extended[:BEAM_WIDTH]
         if attacks:
-            self._active += [(n.onset + n.sounding_duration, n) for n in attacks]
+            self._active += [(self._ends.get(n, n.onset + n.sounding_duration), n)
+                             for n in attacks]
 
     def best_choices(self) -> list[_Choice]:
         """The choices of the best complete path, in onset order."""
@@ -286,9 +298,31 @@ def _close(head: Note, by_voice: dict[tuple, Note], by_pitch: dict[tuple, Note])
             del table[key]
 
 
-def _propagate_tie_results(continuations: dict[Note, Note]) -> None:
-    """Tied continuations take the color, string, fret, finger and reason of their head."""
-    for note, head in continuations.items():
+def _mark_reattacks(reattacks: Mapping[Note, Note]) -> list[Note]:
+    """
+    Mark *not as written* (purple) the re-attacks of a sounding unison that are playable
+    or difficult as one note; unplayable ones stay red. Returns the notes marked.
+    """
+    marked = []
+    for note, released in reattacks.items():
+        if note.color not in ('green', 'orange'):
+            continue
+        reason = (f're-attacks {released.pitch_name} still sounding in voice '
+                  f'{released.voice}: one note on one string')
+        if note.color == 'orange':
+            reason += f'; {note.reason}'
+        note.set_color(NOT_AS_WRITTEN_COLOR)
+        note.set_reason(reason)
+        marked.append(note)
+    return marked
+
+
+def _propagate_results(sources: Mapping[Note, Note]) -> None:
+    """
+    Copy color, string, fret, finger and reason from the fingered note to the notes that
+    follow it: tied continuations and graphic doublings.
+    """
+    for note, head in sources.items():
         note.set_color(head.color)
         note.set_fret(head.fret)
         note.set_finger(head.finger)

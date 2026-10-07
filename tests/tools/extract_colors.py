@@ -28,7 +28,8 @@ FIELDS = ["part", "measure", "index", "voice", "staff", "pitch", "chord", "color
 KEY = ("part", "measure", "index")
 
 # Hex codes written by ISPOG (config/settings.py, COLOR_CODES)
-COLOR_NAMES = {"#cf0000": "red", "#005000": "green", "#ff8c00": "orange", "#000000": "black"}
+COLOR_NAMES = {"#cf0000": "red", "#005000": "green", "#ff8c00": "orange", "#7b1fa2": "purple",
+               "#000000": "black"}
 ACCIDENTALS = {"0": "", "1": "#", "-1": "b", "2": "##", "-2": "bb"}
 
 
@@ -84,7 +85,8 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 def color_summary(rows: list[dict[str, str]]) -> str:
     counts = Counter(r["color"] for r in rows if r["pitch"] not in ("rest", "unpitched"))
-    return ", ".join(f"{c} {counts[c]}" for c in ("green", "orange", "red", "black", "-") if counts[c])
+    colors = ("green", "orange", "red", "purple", "black", "-")
+    return ", ".join(f"{c} {counts[c]}" for c in colors if counts[c])
 
 
 def diff(old_path: Path, new_path: Path) -> int:

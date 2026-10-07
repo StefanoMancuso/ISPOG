@@ -55,7 +55,7 @@ def main() -> int:
     out_dir = CORPUS_DIR / CORPUS_OUTPUT
     out_dir.mkdir(exist_ok=True)
 
-    header = f"{'file':<36} {'software':<24} parts guit notes green orange red  black"
+    header = f"{'file':<36} {'software':<24} parts guit notes green orange red  purple black"
     print(header)
     print("-" * len(header))
     seen_software, failures, kinds = [], 0, set()
@@ -76,14 +76,14 @@ def main() -> int:
         (out_dir / f"{stem}_ispog_report.txt").write_text(render_report(result),
                                                           encoding="utf-8")
         totals = {c: sum(r.counts[c] for r in result.reports)
-                  for c in ("green", "orange", "red", "black")}
+                  for c in ("green", "orange", "red", "purple", "black")}
         notes = sum(totals.values())
         guitars = sum(p.is_guitar for p in parts)
         if len(parts) > 1 and guitars > 1:
             kinds.add("ensemble")
         print(f"{name[:36]:<36} {soft[:24]:<24} {len(parts):>5} {guitars:>4} {notes:>5} "
               f"{totals['green']:>5} {totals['orange']:>6} {totals['red']:>4} "
-              f"{totals['black']:>6}")
+              f"{totals['purple']:>6} {totals['black']:>6}")
 
     missing = [label for label, words in SOURCES.items()
                if not any(w in s for s in seen_software for w in words)]

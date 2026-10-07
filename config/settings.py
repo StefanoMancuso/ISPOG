@@ -110,6 +110,7 @@ NOTE_COLORS = {
     'playable': 'green',
     'difficult': 'orange', 
     'unplayable': 'red',
+    'not_as_written': 'purple',      # unison re-attacked while sounding: one note only
     'default': 'black',
 }
 
@@ -118,6 +119,7 @@ COLOR_CODES = {
     'red': '#CF0000',
     'green': '#005000',
     'orange': '#FF8C00',
+    'purple': '#7B1FA2',
     'black': '#000000',
 }
 
@@ -176,7 +178,7 @@ REPORT_TEXT = {
     'positions_value': 'string/fret:finger (1 index, 2 middle, 3 ring, 4 pinky)',
     'part': '== {name} ({part_id}) ==',
     'summary': ('Notes analyzed {analyzed} · playable {green} ({percent}%) · difficult {orange}'
-                ' · unplayable {red} · not analyzed {black}'),
+                ' · unplayable {red} · not as written {purple} · not analyzed {black}'),
     'point': 'm. {measure}, beat {beat} — {status}',
     'grace': ' (grace notes)',
     'unplayable': 'UNPLAYABLE',
@@ -186,10 +188,13 @@ REPORT_TEXT = {
     'reason': 'Reason:',
     'closest': 'Closest:',
     'no_problems': 'No difficult or unplayable passages.',
+    'unisons': 'Not playable as written: unisons played as one note',
     'not_analyzed': 'Not analyzed',
     'not_analyzed_item': 'm. {measure}, beat {beat} — {pitch}: {reason}',
     # One line per part in the end-of-analysis message (desktop dialog, web page)
-    'short_summary': '{name}: {total} notes · {orange} difficult · {red} unplayable{where}',
+    'short_summary': ('{name}: {total} notes · {orange} difficult · {red} unplayable'
+                      '{purple}{where}'),
+    'short_summary_purple': ' · {purple} not as written',
     'short_summary_where': ' (m. {measures})',
 }
 
@@ -206,6 +211,7 @@ LABEL_TEXT = {
     'pinky_barre': 'pinky barré',
     'stretch': 'stretch',
     'crossing': 'crossed fingers',
+    'unison': 'unison',                  # purple: re-attack of a sounding unison
 }
 
 # ============================================================================
@@ -237,7 +243,8 @@ WEB_TEXT = {
     'title': 'ISPOG — Is it Playable on Guitar?',
     'intro': ('Upload a MusicXML score to check which notes and chords can be played on the '
               'guitar. Notes are colored in the score: **green** playable, **orange** '
-              'difficult, **red** unplayable, black not analyzed.'),
+              'difficult, **red** unplayable, **purple** playable only as one note (a unison '
+              're-attacked while sounding), black not analyzed.'),
     'score': 'Score (.musicxml, .mxl, .xml)',
     'parts': 'Parts to analyze',
     'output': 'Output',

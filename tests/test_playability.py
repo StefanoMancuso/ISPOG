@@ -23,6 +23,7 @@ STANDARD = Fretboard(["E4", "B3", "G3", "D3", "A2", "E2"], 19)
 
 # (index in the part, pitch, baseline color, new color, plan §5 reason)
 EXPECTED_DIFFERENCES = [
+    (23, "B2", "red", "purple", "0.10.0b3 unison re-attacked while the chord still sounds"),
     (31, "D3", "red", "green", "§5.1 tied continuation inherits its head"),
 ]
 
@@ -67,20 +68,27 @@ def test_test01_tied_continuation(test01):
 
 
 def test_test01_held_chord_blocks_later_attacks(test01):
-    # measure 1: the open E chord is still sounding when B2 and C3 are attacked
+    # measure 1: the E minor chord is still sounding when B2 and C3 are attacked; B2 is a
+    # note of the chord, re-plucked on its string (not as written), C3 has no string left
     _, result = test01
-    blocked = [e for e in result.events if e.onset in (Fraction(5, 2), Fraction(11, 4))]
-    assert [[n.pitch_name for n in e.notes] for e in blocked] == [["B2"], ["C3"]]
-    for event in blocked:
-        assert event.analysis.playability is Playability.UNPLAYABLE
-        assert len(event.held) == 6
-        assert event.analysis.reason == "1 note + 6 held notes on 6 strings"
+    reattack, blocked = [e for e in result.events
+                         if e.onset in (Fraction(5, 2), Fraction(11, 4))]
+    assert [n.pitch_name for n in reattack.notes] == ["B2"]
+    assert reattack.analysis.playability is Playability.PLAYABLE
+    assert len(reattack.held) == 5
+    assert reattack.notes[0].color == "purple" and reattack.notes[0].fret == (5, 2)
+    assert result.unisons == reattack.notes
+
+    assert [n.pitch_name for n in blocked.notes] == ["C3"]
+    assert blocked.analysis.playability is Playability.UNPLAYABLE
+    assert len(blocked.held) == 6
+    assert blocked.analysis.reason == "1 note + 6 held notes on 6 strings"
 
 
 def test_test01_every_pitched_note_is_colored(test01):
     notes, result = test01
     assert result.not_analyzed == []
-    assert all(n.color in ("green", "orange", "red") for n in notes if not n.is_rest)
+    assert all(n.color in ("green", "orange", "red", "purple") for n in notes if not n.is_rest)
     assert all(n.reason for n in notes if not n.is_rest)
 
 

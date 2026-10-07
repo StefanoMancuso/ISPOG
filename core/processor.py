@@ -92,11 +92,12 @@ def analyze(config: AnalysisConfig) -> AnalysisResult:
         playability = analyze_notes(notes, fretboard)
         colorize(notes)
         if config.labels:
-            annotate(part.element, playability.events)
+            annotate(part.element, playability.events, playability.unisons)
         else:
             remove_annotations(part.element)
         report = PartReport(part_id=part.part_id, name=part.name, notes=notes,
-                            events=playability.events, not_analyzed=playability.not_analyzed)
+                            events=playability.events, not_analyzed=playability.not_analyzed,
+                            unisons=playability.unisons)
         logger.info('Part %s %r: %s', part.part_id, part.name, report.counts)
         reports.append(report)
 
