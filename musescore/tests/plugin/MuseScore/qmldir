@@ -1,0 +1,4 @@
+module MuseScore
+MuseScore 3.0 MuseScore.qml
+Element 3.0 Element.qml
+Cursor 3.0 Cursor.qml

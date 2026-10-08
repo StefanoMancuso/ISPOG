@@ -32,6 +32,11 @@ def note_name_to_midi(name: str) -> int:
     return 12 * (int(octave) + 1) + STEP_SEMITONES[step.upper()] + _ACCIDENTAL_SEMITONES[accidental]
 
 
+def parse_tuning(text: str) -> tuple[str, ...]:
+    """``E4 B3 G3 D3 A2 E2`` (spaces, commas or semicolons) -> note names, string 1 first."""
+    return tuple(t for t in text.replace(',', ' ').replace(';', ' ').split() if t)
+
+
 def midi_to_note_name(midi: int) -> str:
     """Note name with sharps, e.g. ``54`` → ``F#3``."""
     names = ('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')

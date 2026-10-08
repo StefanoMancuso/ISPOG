@@ -108,3 +108,28 @@ def test_summary_line_lists_at_most_max_measures(write_score):
     assert report.red_measures == ["1", "2", "3", "4"]
     assert render_summary(report, max_measures=2).endswith("(m. 1, 2 …)")
     assert render_summary(report, max_measures=4).endswith("(m. 1, 2, 3, 4)")
+
+
+def test_tuning_per_part(test_poli_path):
+    from core.processor import PartSettings
+    text = _report(test_poli_path, part_settings={
+        "P4": PartSettings(("E4", "B3", "G3", "D3", "A2", "D2"), 12)})
+    assert "Tuning:  per part (below)\n" in text
+    assert ("== Chitarra classica 1 (P3) ==\nTuning:  E4 B3 G3 D3 A2 E2 · 19 frets\n") in text
+    assert ("== Chitarra classica 2 (P4) ==\nTuning:  E4 B3 G3 D3 A2 D2 · 12 frets\n") in text
+
+
+def test_problem_points(test01_path):
+    from core.report import problem_points
+    result = analyze(AnalysisConfig(test01_path, tuning=STANDARD))
+    points = problem_points(result.reports[0])
+    assert [(p.title, p.color, p.label) for p in points] == [
+        ("m. 1, beat 3 1/2 — NOT AS WRITTEN", "purple", "unison"),
+        ("m. 1, beat 3 3/4 — UNPLAYABLE", "red", "no free string"),
+        ("m. 1, beat 4 1/2 — UNPLAYABLE", "red", "no free string"),
+    ]
+    unplayable = points[1]
+    assert unplayable.reason == "1 note + 6 held notes on 6 strings"
+    assert unplayable.details[0] == "Notes:   C3"
+    assert unplayable.details[1].startswith("Held:    E2 (6/0)")
+    assert all(p.part_name == "Chitarra classica" for p in points)

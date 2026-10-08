@@ -12,15 +12,17 @@ from tkinter import messagebox, ttk
 from typing import Optional
 
 from config import (APP_FULL_NAME, APP_TITLE, LICENSE_NAME, PAPER_CITATION, REPOSITORY_URL,
-                    UI_TEXT, WINDOW_RESIZABLE)
+                    UI_TEXT, WINDOW_MIN_SIZE, WINDOW_SIZE)
 from config.version import __version__
 from core import IspogError, list_parts, load_score, output_names, render_report, report_name
 from core.bugreport import ReportContent
 from utils import get_logger, log_dir
 from utils.logger import current_log_file
+from . import theme
 from .dialogs import open_folder
 from .report_dialog import ReportDialog
-from .widgets import FileSelectorWidget, PartSelectorWidget, ProcessButton, TuningWidget
+from .widgets import (FileSelectorWidget, OptionsWidget, PartsWidget, ProcessButton,
+                      ResultsPanel)
 
 logger = get_logger(__name__)
 
@@ -37,18 +39,18 @@ class MainWindow(tk.Tk):
         logger.info('Initializing main window')
 
         self.title(APP_TITLE)
-        self.resizable(WINDOW_RESIZABLE, WINDOW_RESIZABLE)
+        theme.apply_theme(self)
 
         self._version = tk.StringVar(self, '')
 
         # Everything below the menu lives in one frame: the whole window is a drop target
-        self.body = ttk.Frame(self)
+        self.body = ttk.Frame(self, padding=theme.PAD)
         self.body.pack(fill='both', expand=True)
 
         self._create_menu()
         self._create_header()
         self._create_widgets()
-        self._fit_to_content()
+        self._set_size()
 
         if sys.platform == 'darwin':
             # Finder sends a score dropped on the app icon, or opened with ISPOG, as an
@@ -68,39 +70,52 @@ class MainWindow(tk.Tk):
         self.config(menu=menubar)
 
     def _create_header(self):
-        """Create application header with title and version."""
-        ttk.Label(self.body, text=APP_FULL_NAME, font=('', 15), anchor='center').pack(
-            fill="x", padx=10, pady=(8, 0))
-        ttk.Label(self.body, textvariable=self._version, font=('', 8), anchor='center',
-                  foreground='gray').pack(fill="x", padx=10, pady=(0, 4))
+        """Title and version."""
+        header = ttk.Frame(self.body)
+        header.pack(fill='x', pady=(0, 8))
+        ttk.Label(header, text=APP_FULL_NAME, style='Title.TLabel').pack(side='left')
+        ttk.Label(header, textvariable=self._version, style='Small.TLabel').pack(
+            side='left', padx=(10, 0), pady=(6, 0))
 
     def _create_widgets(self):
-        """Create and layout all main widgets."""
+        """Score, parts, output, Analyze, results: top to bottom."""
         body = self.body
         self.file_selector = FileSelectorWidget(body, on_file_loaded=self._on_file_loaded)
-        self.file_selector.pack(fill="x", padx=10, pady=(2, 6))
+        self.file_selector.pack(fill='x')
 
-        self.part_selector = PartSelectorWidget(body)
-        self.part_selector.pack(fill="x", padx=10, pady=(0, 6))
+        self.parts = PartsWidget(body, on_change=self._on_settings_changed)
+        self.parts.pack(fill='x', pady=(8, 0))
 
-        self.tuning_widget = TuningWidget(body)
-        self.tuning_widget.pack(fill='x', padx=10, pady=(0, 4))
+        self.options = OptionsWidget(body)
+        self.options.pack(fill='x', pady=(8, 0))
+        for variable in (self.options.output_mode, self.options.labels):
+            variable.trace_add('write', lambda *a: self._on_settings_changed())
 
-        self.process_button = ProcessButton(body, self.file_selector, self.tuning_widget,
-                                            self.part_selector, on_error=self.offer_report)
-        self.process_button.pack(fill="x", padx=10, pady=(0, 8))
+        self.process_button = ProcessButton(body, self.file_selector, self.parts, self.options,
+                                            on_result=self._on_result, on_error=self.offer_report)
+        self.process_button.pack(fill='x', pady=(10, 8))
+
+        self.results = ResultsPanel(body, on_save=self.process_button.save)
+        self.results.pack(fill='both', expand=True)
 
         # A score can be dropped anywhere in the window
         self.file_selector.enable_drop([body])
 
-    def _fit_to_content(self) -> None:
-        """
-        Size the window to its content, then keep that size: the layout is built so that
-        nothing grows afterwards (short status texts, fixed-width part list, progress bar in
-        place of the button). The size follows the fonts of each system.
-        """
+    def _set_size(self) -> None:
+        """Start at WINDOW_SIZE, within the screen; the window can be resized above the minimum."""
         self.update_idletasks()
-        self.geometry(f'{self.winfo_reqwidth()}x{self.winfo_reqheight()}')
+        width, height = WINDOW_SIZE
+        height = min(height, self.winfo_screenheight() - 80)
+        self.minsize(*WINDOW_MIN_SIZE)
+        self.geometry(f'{max(width, self.body.winfo_reqwidth())}x{max(height, WINDOW_MIN_SIZE[1])}')
+
+    def _on_result(self, result) -> None:
+        self.results.show(result)
+
+    def _on_settings_changed(self) -> None:
+        """Results on screen no longer match the settings: say so until the next analysis."""
+        if self.process_button.last_result is not None and hasattr(self, 'results'):
+            self.results.set_stale(True)
 
     def open_documents(self, *paths: str) -> None:
         """Files opened from the system (macOS Finder): the first one is loaded."""
@@ -114,12 +129,14 @@ class MainWindow(tk.Tk):
             parts = list_parts(load_score(path))
         except IspogError as e:
             logger.warning(f'File refused: {e}')
-            self.part_selector.clear()
+            self.parts.clear()
+            self.results.clear()
             self.offer_report(str(e), e, title=UI_TEXT['file_error'])
             return False
         logger.info(f'{path.name}: {len(parts)} part(s), '
                     f'{sum(p.is_guitar for p in parts)} guitar(s)')
-        self.part_selector.set_parts(parts)
+        self.parts.set_parts(parts)
+        self.results.clear()
         return True
 
     def _show_about(self):
@@ -151,12 +168,12 @@ class MainWindow(tk.Tk):
         return {
             'score': Path(current).name if current else None,
             'parts': [f'{p.part_id} {p.name}' + (' (guitar)' if p.is_guitar else '')
-                      for p in self.part_selector.parts],
-            'selected': [p.part_id for p in self.part_selector.selected_parts()],
-            'tuning': self.tuning_widget.get_tuning(),
-            'frets': self.tuning_widget.get_num_frets(),
-            'output': self.part_selector.get_output_mode(),
-            'labels': self.part_selector.get_labels(),
+                      for p in self.parts.parts],
+            'selected': [p.part_id for p in self.parts.selected_parts()],
+            'instruments': {row.part.part_id: f'{row.tuning.get()} · {row.frets.get()} frets'
+                            for row in self.parts.rows if row.analyze.get()},
+            'output': self.options.get_output_mode(),
+            'labels': self.options.get_labels(),
         }
 
     def _last_analysis_files(self) -> dict[str, bytes]:
@@ -179,5 +196,5 @@ class MainWindow(tk.Tk):
             version_string: Version string to display
         """
         self.title(f'{APP_TITLE} {version_string}')
-        self._version.set(f'ver. {version_string}')
+        self._version.set(f'{APP_TITLE} {version_string}')
         logger.debug(f'Version set to: {version_string}')

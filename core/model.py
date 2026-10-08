@@ -43,6 +43,8 @@ class PartInfo:
     name: str
     is_guitar: bool
     element: etree._Element = field(repr=False)
+    # open strings written in the score (<staff-tuning>), string 1 (highest) first
+    tuning: Optional[tuple[str, ...]] = None
 
 
 @dataclass(eq=False)
@@ -249,6 +251,8 @@ class PartReport:
     events: list[ChordEvent] = field(repr=False)     # analyzer calls, in onset order
     not_analyzed: list[Note] = field(repr=False)     # pitched notes left black, with reason
     unisons: list[Note] = field(default_factory=list, repr=False)  # purple: not as written
+    tuning: tuple[str, ...] = ()                     # open strings the part was analyzed with
+    num_frets: int = 0
 
     @property
     def pitched(self) -> list[Note]:

@@ -197,10 +197,40 @@ def list_parts(score: ScoreLike) -> list[PartInfo]:
             name=_part_name(score_part),
             is_guitar=_is_guitar(score_part),
             element=element,
+            tuning=staff_tuning(element),
         )
         logger.debug('Part %s %r: guitar=%s', info.part_id, info.name, info.is_guitar)
         parts.append(info)
     return parts
+
+
+_ALTER_TEXT = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
+
+
+def staff_tuning(part: etree._Element) -> Optional[tuple[str, ...]]:
+    """
+    Open strings written in the part (``<staff-details>/<staff-tuning>``, usually on TAB
+    staves), string 1 (highest) first, as note names (``E4``, ``F#2``); None if the part
+    has none. Line 1 of ``<staff-tuning>`` is the lowest string.
+    """
+    for details in part.iterfind('measure/attributes/staff-details'):
+        strings = []
+        for tuning in details.iterfind('staff-tuning'):
+            try:
+                line = int(tuning.get('line'))
+                step = (tuning.findtext('tuning-step') or '').strip().upper()
+                alter = int(Fraction((tuning.findtext('tuning-alter') or '0').strip()))
+                octave = int(tuning.findtext('tuning-octave'))
+            except (TypeError, ValueError):
+                strings = []
+                break
+            if step not in 'ABCDEFG' or not step or alter not in _ALTER_TEXT:
+                strings = []
+                break
+            strings.append((line, f'{step}{_ALTER_TEXT[alter]}{octave}'))
+        if strings:
+            return tuple(name for _, name in sorted(strings, reverse=True))
+    return None
 
 
 def _part_name(score_part: etree._Element) -> str:

@@ -12,12 +12,18 @@ After it:
 
     python scripts/release.py start-dev 0.10.0b2      # version 0.10.0b2.dev0
 
+``prepare`` and ``start-dev`` also write the version in the MuseScore plugin
+(musescore/ISPOG/ispog.qml, ispog_engine.js).
+
 In the release workflow (.github/workflows/release.yml):
 
     python scripts/release.py check v0.10.0b1         # prints version=..., prerelease=...
     python scripts/release.py version                 # the same, without checks (dry run)
     python scripts/release.py notes 0.10.0b1          # CHANGELOG section, for the release page
     python scripts/release.py upload-hf dist 0.10.0b1 # executables to Hugging Face
+
+On Hugging Face a release replaces the executables in the root and moves the previous ones
+to archive/<version>/; a pre-release replaces the previous one in beta/.
 """
 
 from __future__ import annotations
@@ -32,11 +38,23 @@ ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_URL = 'https://github.com/StefanoMancuso/ISPOG'
 HF_REPO = 'StefanoMancuso88/ISPOG'
 ARTIFACT_PREFIX = 'ISPOG-'
+HF_ARCHIVE = 'archive'                     # earlier releases on Hugging Face: archive/<version>/
+# A published executable: ISPOG-<version>-<platform>.<ext>, or ISPOG_<version>.zip (0.9.1)
+_ARTIFACT = re.compile(r'^ISPOG[-_](?P<version>\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?'
+                       r'(?:\.post\d+)?)(?=[-_.])')
 
 # "## [0.10.0b1] - 2026-10-01" or "## [Unreleased]"
 _SECTION = re.compile(r'^## \[(?P<name>[^\]]+)\](?: - (?P<date>\d{4}-\d{2}-\d{2}))?[ \t]*$',
                       re.M)
 _VERSION_LINE = re.compile(r'^__version__ = "(?P<version>[^"]+)"$', re.M)
+# The MuseScore plugin carries the version of ISPOG: (file, line pattern, line template)
+PLUGIN_VERSION_LINES = (
+    ('musescore/ISPOG/ispog.qml', re.compile(r'^    version: "(?P<version>[^"]*)"$', re.M),
+     '    version: "{version}"'),
+    ('musescore/ISPOG/ispog_engine.js',
+     re.compile(r'^var ENGINE_VERSION = "(?P<version>[^"]*)";$', re.M),
+     'var ENGINE_VERSION = "{version}";'),
+)
 # Release versions only: 1.2.3, 1.2.3a1, 1.2.3b2, 1.2.3rc1 (no .devN, .postN, local)
 _RELEASE = re.compile(r'^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$')
 
@@ -143,9 +161,29 @@ def start_dev(version: str, root: Path = ROOT) -> None:
 
 
 def _write_version(version: str, root: Path) -> None:
+    """The version in config/version.py and in the MuseScore plugin (if present)."""
     path = root / 'config' / 'version.py'
     text = _VERSION_LINE.sub(f'__version__ = "{version}"', path.read_text(encoding='utf-8'))
     path.write_text(text, encoding='utf-8')
+    for relative, pattern, line in PLUGIN_VERSION_LINES:
+        plugin = root / relative
+        if plugin.is_file():
+            text, found = pattern.subn(line.format(version=version),
+                                       plugin.read_text(encoding='utf-8'), count=1)
+            if not found:
+                raise ReleaseError(f'{relative} has no version line to update')
+            plugin.write_text(text, encoding='utf-8')
+
+
+def plugin_versions(root: Path = ROOT) -> dict[str, str]:
+    """The version written in each file of the MuseScore plugin, by file."""
+    versions = {}
+    for relative, pattern, _ in PLUGIN_VERSION_LINES:
+        plugin = root / relative
+        if plugin.is_file():
+            match = pattern.search(plugin.read_text(encoding='utf-8'))
+            versions[relative] = match['version'] if match else ''
+    return versions
 
 
 def hf_folder(version: str) -> str:
@@ -153,25 +191,83 @@ def hf_folder(version: str) -> str:
     return 'beta' if is_prerelease(version) else ''
 
 
+def artifact_version(name: str) -> str | None:
+    """
+    The version in the name of a published executable, None for other files:
+    ``ISPOG-0.10.0-windows.exe`` -> 0.10.0; also the 0.9.1 naming, ``ISPOG_0.9.1.zip``.
+    """
+    match = _ARTIFACT.match(name)
+    return match['version'] if match else None
+
+
+def plan_hf_upload(version: str, uploads: list[str], existing: list[str]) -> dict[str, list]:
+    """
+    What an upload of ``version`` does in its Hugging Face folder (``hf_folder``).
+
+    ``uploads``: names of the new files; ``existing``: paths of the files now in the folder.
+    Returns ``add`` (path of each upload), ``archive`` (source, destination) and ``delete``
+    (paths). The executables of other versions leave the folder: a release moves them to
+    ``archive/<their version>/`` (published versions stay downloadable, e.g. for citations);
+    a pre-release deletes them (``beta/`` holds only the latest beta). Files of the same
+    version that are not uploaded again are deleted; other files are kept.
+    """
+    target = hf_folder(version)
+    keep_old = not is_prerelease(version)
+    plan = {'add': [_join(target, name) for name in uploads], 'archive': [], 'delete': []}
+    for path in existing:
+        name = path.rpartition('/')[2]
+        old = artifact_version(name)
+        if old is None or path != _join(target, name):
+            continue                                   # not an executable of this folder
+        if old != version and keep_old:
+            plan['archive'].append((path, f'{HF_ARCHIVE}/{old}/{name}'))
+        if path not in plan['add']:                    # same path: overwritten by the upload
+            plan['delete'].append(path)
+    return plan
+
+
 def upload_hf(folder: Path, version: str, repo: str = HF_REPO) -> None:
     """
-    Upload the executables of ``version`` (``ISPOG-<version>-*``) to Hugging Face, replacing
-    those of the previous version in the same folder. Token: HF_TOKEN.
+    Upload the executables of ``version`` (``ISPOG-<version>-*``) to Hugging Face, in the
+    folder of ``hf_folder``, as ``plan_hf_upload`` says. Token: HF_TOKEN.
+    Two commits: first the archive copies, then the new files with the deletions, so that a
+    failure never leaves a published version only in the history.
     """
-    from huggingface_hub import HfApi
+    from huggingface_hub import (CommitOperationAdd, CommitOperationCopy,
+                                 CommitOperationDelete, HfApi)
+    from huggingface_hub.hf_api import RepoFile
 
     files = sorted(folder.glob(f'{ARTIFACT_PREFIX}{version}-*'))
     if not files:
         raise ReleaseError(f'no {ARTIFACT_PREFIX}{version}-* file in {folder}')
+    api = HfApi()
     target = hf_folder(version)
-    HfApi().upload_folder(
-        repo_id=repo, repo_type='model', folder_path=str(folder),
-        path_in_repo=target or None,
-        allow_patterns=[f.name for f in files],
-        delete_patterns=[f'{ARTIFACT_PREFIX}*'],       # the previous version, same folder
+    existing = [entry.path for entry in api.list_repo_tree(
+        repo, path_in_repo=target or None, repo_type='model') if isinstance(entry, RepoFile)]
+    plan = plan_hf_upload(version, [f.name for f in files], existing)
+
+    if plan['archive']:
+        archived = sorted({dst.split('/')[1] for _, dst in plan['archive']})
+        api.create_commit(
+            repo_id=repo, repo_type='model',
+            operations=[CommitOperationCopy(src_path_in_repo=src, path_in_repo=dst)
+                        for src, dst in plan['archive']],
+            commit_message=f'Archive ISPOG {", ".join(archived)}',
+        )
+    api.create_commit(
+        repo_id=repo, repo_type='model',
+        operations=[CommitOperationAdd(path_in_repo=path, path_or_fileobj=str(file))
+                    for path, file in zip(plan['add'], files)]
+        + [CommitOperationDelete(path_in_repo=path) for path in plan['delete']],
         commit_message=f'ISPOG {version}',
     )
     print(f'Uploaded to {repo}/{target or "(root)"}: {", ".join(f.name for f in files)}')
+    for src, dst in plan['archive']:
+        print(f'Archived {src} -> {dst}')
+
+
+def _join(folder: str, name: str) -> str:
+    return f'{folder}/{name}' if folder else name
 
 
 # ---------------------------------------------------------------------------

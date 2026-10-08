@@ -12,7 +12,8 @@ from typing import Dict, List
 
 APP_TITLE = "ISPOG"
 APP_FULL_NAME = "Is it Playable on Guitar?"
-WINDOW_RESIZABLE = False       # the window takes the size of its content (gui/main_window.py)
+WINDOW_SIZE = (640, 820)       # initial size, within the screen (gui/main_window.py)
+WINDOW_MIN_SIZE = (560, 600)
 MAX_NAME_CHARS = 34            # longer file names are shortened with an ellipsis
 
 REPOSITORY_URL = "https://github.com/StefanoMancuso/ISPOG"
@@ -28,7 +29,6 @@ PAPER_CITATION = (
 # ============================================================================
 
 # Default values
-DEFAULT_NUM_STRINGS = 6
 DEFAULT_NUM_FRETS = 19
 MIN_FRETS = 12
 MAX_FRETS = 24
@@ -81,16 +81,6 @@ TUNING_PRESETS: Dict[str, TuningPreset] = {
     ),
 }
 
-# Full note list for spinboxes (C0 to B8)
-NOTE_LIST = tuple(
-    f'{note}{octave}'
-    for octave in range(9)
-    for note in ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-)
-
-# Note indices for standard tuning (E4, B3, G3, D3, A2, E2, B1, F#1)
-STANDARD_TUNING_INDICES = [52, 47, 43, 38, 33, 28, 23, 18]
-
 # ============================================================================
 # FILE HANDLING
 # ============================================================================
@@ -128,6 +118,23 @@ COLOR_CODES = {
 # ============================================================================
 
 UI_TEXT = {
+    'analyze': 'Analyze Playability',
+    'parts_title': 'Parts',
+    'tuning_hint': 'each with its own tuning (string 1 first) and frets',
+    'no_parts_yet': 'The parts of the score will be listed here',
+    'not_a_guitar': 'not a guitar',
+    'preset_from_score': 'From score',
+    'preset_custom': 'Custom',
+    'invalid_settings': 'Check the settings',
+    'results_empty': 'Analyze a score to see its problems here.',
+    'results_stale': 'Settings changed: analyze again to update the results.',
+    'problems_tab': 'Problems ({count})',
+    'report_tab': 'Report',
+    'no_problems': 'No difficult or unplayable passages.',
+    'click_problem': 'Click a problem to see its notes and the closest fingering found.',
+    'save_score': 'Save colored score…',
+    'not_saved': 'Not saved yet',
+    'saved_line': 'Saved: {files}',
     'no_file_loaded': 'No file loaded',
     'no_file_drop': 'No file loaded: browse or drop a score',
     'drop_active': 'Release to load the score',
@@ -173,6 +180,7 @@ REPORT_TEXT = {
     'file': 'File:',
     'tuning': 'Tuning:',
     'tuning_value': '{tuning} · {frets} frets',
+    'tuning_per_part': 'per part (below)',
     'date': 'Date:',
     'positions': 'Fingers:',
     'positions_value': 'string/fret:finger (1 index, 2 middle, 3 ring, 4 pinky)',
@@ -183,6 +191,7 @@ REPORT_TEXT = {
     'grace': ' (grace notes)',
     'unplayable': 'UNPLAYABLE',
     'difficult': 'DIFFICULT',
+    'not_as_written': 'NOT AS WRITTEN',
     'notes': 'Notes:',
     'held': 'Held:',
     'reason': 'Reason:',
@@ -246,16 +255,21 @@ WEB_TEXT = {
               'difficult, **red** unplayable, **purple** playable only as one note (a unison '
               're-attacked while sounding), black not analyzed.'),
     'score': 'Score (.musicxml, .mxl, .xml)',
-    'parts': 'Parts to analyze',
+    'parts': 'Parts: tick the ones to analyze, each with its tuning (string 1 first) and frets',
+    'set_tuning': 'Tuning of the ticked parts',
+    'column_analyze': '✓',
+    'column_part': 'Part',
+    'column_tuning': 'Tuning',
+    'column_frets': 'Frets',
+    'problems': 'Problems',
+    'column_where': 'Where',
+    'column_problem': 'Problem',
+    'column_reason': 'Reason and notes',
+    'no_problems': 'No difficult or unplayable passages.',
     'output': 'Output',
     'output_full': 'Full score',
     'output_split': 'Separate parts',
     'labels': 'Add labels to score',
-    'tuning': 'Tuning',
-    'custom': 'Custom',
-    'strings': 'Strings',
-    'string': 'String {number}',
-    'frets': 'Frets',
     'analyze': 'Analyze Playability',
     'results': 'Colored score and report',
     'report': 'Report',

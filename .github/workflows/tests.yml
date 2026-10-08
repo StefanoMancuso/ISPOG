@@ -59,3 +59,27 @@ jobs:
         run: pip install -e ".[dev,web]"
       - name: Test
         run: pytest -v -m web
+
+  musescore:                         # every run: the MuseScore plugin against the Python core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the project and Qt for Python
+        run: |
+          sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1
+          pip install -e ".[dev]" PySide6-Essentials
+      - name: Fixtures from the Python core
+        run: python musescore/tests/make_fixtures.py
+      - name: Engine in Node
+        run: node musescore/tests/run_tests.js
+      - name: Engine in the Qt JavaScript engine
+        run: python musescore/tests/run_tests_qt.py
+      - name: Plugin with a test double of MuseScore
+        run: python musescore/tests/run_plugin_tests.py

@@ -10,6 +10,7 @@ desktop deliver identical files for the same input and options.
 
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -61,34 +62,75 @@ def test_summary_is_the_desktop_text(test01_path, tmp_path):
         "- Chitarra classica: 44 notes · 0 difficult · 7 unplayable · 1 not as written (m. 1)")
 
 
+def test_each_part_with_its_instrument(test_poli_path, tmp_path):
+    from core import PartSettings
+    drop_d = PartSettings(("E4", "B3", "G3", "D3", "A2", "D2"), 12)
+    web = app.run_analysis(test_poli_path, ["P3", "P4"], STANDARD, 19, "full", True,
+                           staging_root=tmp_path, part_settings={"P4": drop_d})
+    desktop = analyze(AnalysisConfig(test_poli_path, tuning=STANDARD, part_ids=["P3", "P4"],
+                                     part_settings={"P4": drop_d}))
+    assert web.files[0].read_bytes() == desktop.outputs["full"]
+    assert "Tuning:  E4 B3 G3 D3 A2 D2 · 12 frets" in web.report
+
+
+def test_problem_rows_are_the_desktop_list(tmp_path):
+    from conftest import FIXTURES_DIR
+    from core import problem_points
+    path = FIXTURES_DIR / "test_ISPOG.mxl"
+    web = app.run_analysis(path, ["P1"], STANDARD, 19, "full", True, staging_root=tmp_path)
+    points = problem_points(analyze(AnalysisConfig(path, tuning=STANDARD)).reports[0])
+    assert len(web.problems) == len(points)
+    first = web.problems[0]
+    assert first[0] == "🟠 m. 1, beat 1" and first[1] == "DIFFICULT · stretch"
+    assert first[2] == "Chitarra classica" and first[3].startswith(points[0].reason)
+    assert all(row[0].startswith("🔴") for row in web.problems[1:])
+
+
 # ---------------------------------------------------------------------------
-# Options
+# Part table
 # ---------------------------------------------------------------------------
-
-def test_tuning_choices_are_the_desktop_presets_and_custom():
-    values = [value for _, value in app.tuning_choices()]
-    assert values == ["standard", "drop_d", "open_g", app.CUSTOM]
-
-
-def test_resolve_tuning():
-    assert app.resolve_tuning("standard", 8, ["C4"] * 8) == STANDARD
-    assert app.resolve_tuning("drop_d", 6, [])[-1] == "D2"
-    notes = ["E4", "B3", "G3", "D3", "A2", "E2", "B1", "F#1"]
-    assert app.resolve_tuning(app.CUSTOM, 7, notes) == tuple(notes[:7])
-    with pytest.raises(ValueError, match="note for each"):
-        app.resolve_tuning(app.CUSTOM, 6, ["E4", "B3", None, "D3", "A2", "E2"])
-    with pytest.raises(ValueError, match="unknown tuning"):
-        app.resolve_tuning("lute", 6, notes)
-
-
-def test_default_custom_notes_are_the_desktop_ones():
-    assert app.DEFAULT_CUSTOM_NOTES == ("E4", "B3", "G3", "D3", "A2", "E2", "B1", "F#1")
-
 
 def test_read_parts(test_poli_path):
-    choices, preselected, status = app.read_parts(test_poli_path)
-    assert choices[2] == ("Chitarra classica 1 (P3)", "P3")
-    assert preselected == ["P3", "P4"] and status == "2 of 4 parts are guitars"
+    rows, part_ids, status = app.read_parts(test_poli_path)
+    assert part_ids == ["P1", "P2", "P3", "P4"]
+    assert rows[2] == [True, "Chitarra classica 1 (P3)", "E4 B3 G3 D3 A2 E2", 19]
+    assert [row[0] for row in rows] == [False, False, True, True]
+    assert status == "2 of 4 parts are guitars"
+
+
+def test_settings_from_rows():
+    rows = [[True, "Guitar (P1)", "E4 B3 G3 D3 A2 D2", 12.0],
+            ["false", "Flute (P2)", "nonsense", 19],
+            ["true", "Lute (P3)", "G4, D4; A3 F3 C3 G2", "19"]]
+    settings = app.settings_from_rows(rows, ["P1", "P2", "P3"])
+    assert list(settings) == ["P1", "P3"]
+    assert settings["P1"].tuning[-1] == "D2" and settings["P1"].num_frets == 12
+    assert settings["P3"].tuning == ("G4", "D4", "A3", "F3", "C3", "G2")
+    with pytest.raises(ValueError, match="Guitar \\(P1\\): invalid number of strings"):
+        app.settings_from_rows([[True, "Guitar (P1)", "E4 B3", 19]], ["P1"])
+    with pytest.raises(ValueError, match="Guitar \\(P1\\).*frets"):
+        app.settings_from_rows([[True, "Guitar (P1)", " ".join(STANDARD), "x"]], ["P1"])
+
+
+def test_preset_fills_the_ticked_parts():
+    rows = [[True, "A (P1)", "x", 19], [False, "B (P2)", "y", 19]]
+    filled = app.apply_preset(rows, "drop_d")
+    assert filled[0][2] == "E4 B3 G3 D3 A2 D2" and filled[1][2] == "y"
+    assert [value for _, value in app.preset_choices()] == ["standard", "drop_d", "open_g"]
+
+
+def test_tuning_written_in_the_score_is_used(write_score):
+    from conftest import attributes, make_score, note
+    details = ("<staff-details><staff-lines>6</staff-lines>" + "".join(
+        f'<staff-tuning line="{line}"><tuning-step>{step}</tuning-step>'
+        f"<tuning-octave>{octave}</tuning-octave></staff-tuning>"
+        for line, (step, octave) in enumerate(
+            [("D", 2), ("G", 2), ("D", 3), ("G", 3), ("B", 3), ("D", 4)], start=1))
+        + "</staff-details>")
+    path = write_score(make_score(measures=[
+        attributes().replace("</attributes>", details + "</attributes>") + note("D", 2, 4)]))
+    rows, _, _ = app.read_parts(path)
+    assert rows[0][2] == "D4 B3 G3 D3 G2 D2"
 
 
 # ---------------------------------------------------------------------------
@@ -97,26 +139,38 @@ def test_read_parts(test_poli_path):
 
 def test_unreadable_score_is_reported_on_the_page(write_score):
     bad = write_score(b"<html>no</html>", "bad.musicxml")
-    parts, status, *cleared = app.on_score_change(str(bad))
-    assert parts.choices == [] and status.startswith("⚠") and "bad.musicxml" in status
-    assert cleared == [None, "", ""]
+    table, part_ids, status, *cleared = app.on_score_change(str(bad))
+    assert table.value["data"] == [] and part_ids == []
+    assert status.startswith("⚠") and "bad.musicxml" in status
+    assert cleared == [None, "", "", []]
 
 
 def test_new_score_clears_the_previous_results(test01_path):
-    parts, status, *cleared = app.on_score_change(str(test01_path))
-    assert parts.value == ["P1"] and cleared == [None, "", ""]
+    table, part_ids, status, *cleared = app.on_score_change(str(test01_path))
+    assert part_ids == ["P1"] and table.value["data"][0][0] is True
+    assert cleared == [None, "", "", []]
+
+
+def test_analysis_from_the_page(test01_path):
+    rows, part_ids, _ = app.read_parts(test01_path)
+    files, report, summary, problems, workdir = app.on_analyze(str(test01_path), rows, part_ids,
+                                                               "full", True)
+    assert [Path(f).name for f in files] == ["Test01_ispog.musicxml", "Test01_ispog_report.txt"]
+    assert "7 unplayable" in summary and len(problems) == 3
+    app.discard(workdir)
 
 
 def test_refused_analysis_raises_a_page_error(write_score):
     bad = write_score(b"<html>no</html>", "bad.musicxml")
     with pytest.raises(gr.Error, match="not a MusicXML score"):
-        app.on_analyze(str(bad), ["P1"], "standard", 6, 19, "full", True)
+        app.on_analyze(str(bad), [[True, "Guitar (P1)", " ".join(STANDARD), 19]], ["P1"],
+                       "full", True)
 
 
-def test_invalid_custom_tuning_raises_a_page_error(test01_path):
+def test_invalid_tuning_raises_a_page_error(test01_path):
     with pytest.raises(gr.Error, match="note name"):
-        app.on_analyze(str(test01_path), ["P1"], app.CUSTOM, 6, 19, "full", True,
-                       "E4", "B3", "G3", "D3", "A2", "H2", "B1", "F#1")
+        app.on_analyze(str(test01_path), [[True, "Guitar (P1)", "E4 B3 G3 D3 A2 H2", 19]],
+                       ["P1"], "full", True)
 
 
 def test_unexpected_error_hides_details(test01_path, monkeypatch):
@@ -124,7 +178,8 @@ def test_unexpected_error_hides_details(test01_path, monkeypatch):
         raise RuntimeError("secret path /srv/x")
     monkeypatch.setattr(app, "run_analysis", boom)
     with pytest.raises(gr.Error) as error:
-        app.on_analyze(str(test01_path), ["P1"], "standard", 6, 19, "full", True)
+        app.on_analyze(str(test01_path), [[True, "Guitar (P1)", " ".join(STANDARD), 19]],
+                       ["P1"], "full", True)
     assert "secret" not in str(error.value)
 
 

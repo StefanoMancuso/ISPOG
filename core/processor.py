@@ -12,9 +12,9 @@ web app) decides where the outputs go. Errors the user must read are IspogError.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence, Union
 
 from config.settings import MAX_FRETS, MAX_STRINGS, MIN_FRETS, MIN_STRINGS
 
@@ -33,6 +33,37 @@ OUTPUT_MODES = ('full', 'split')
 
 
 @dataclass(frozen=True)
+class PartSettings:
+    """
+    The instrument a part is analyzed for.
+
+    Attributes:
+        tuning: open strings, string 1 (highest) first; its length is the number of strings.
+        num_frets: frets on the neck.
+
+    Raises:
+        ValueError: invalid number of strings or frets, or a note name (the message can be
+            shown as is).
+    """
+
+    tuning: Sequence[str]
+    num_frets: int = 19
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'tuning', tuple(self.tuning))
+        if not MIN_STRINGS <= len(self.tuning) <= MAX_STRINGS:
+            raise ValueError(f'invalid number of strings: {len(self.tuning)} '
+                             f'({MIN_STRINGS} to {MAX_STRINGS})')
+        if not MIN_FRETS <= self.num_frets <= MAX_FRETS:
+            raise ValueError(f'invalid number of frets: {self.num_frets} '
+                             f'({MIN_FRETS} to {MAX_FRETS})')
+        Fretboard(self.tuning, self.num_frets)          # validates the note names
+
+    def fretboard(self) -> Fretboard:
+        return Fretboard(self.tuning, self.num_frets)
+
+
+@dataclass(frozen=True)
 class AnalysisConfig:
     """
     Parameters of one analysis.
@@ -44,6 +75,8 @@ class AnalysisConfig:
         part_ids: parts to analyze; None = the guitar parts found in the score.
         output_mode: 'full' (one score) or 'split' (one score per analyzed part).
         labels: write a short label above difficult and unplayable points.
+        part_settings: tuning and frets of single parts, by part id; the other parts use
+            ``tuning`` and ``num_frets``.
     """
 
     filepath: Union[str, Path]
@@ -52,23 +85,28 @@ class AnalysisConfig:
     part_ids: Optional[Sequence[str]] = None
     output_mode: str = 'full'
     labels: bool = True
+    part_settings: Mapping[str, PartSettings] = field(default_factory=dict, hash=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, 'filepath', Path(self.filepath))
         object.__setattr__(self, 'tuning', tuple(self.tuning))
         if self.part_ids is not None:
             object.__setattr__(self, 'part_ids', tuple(self.part_ids))
-        if not MIN_STRINGS <= len(self.tuning) <= MAX_STRINGS:
-            raise ValueError(f'invalid number of strings: {len(self.tuning)}')
-        if not MIN_FRETS <= self.num_frets <= MAX_FRETS:
-            raise ValueError(f'invalid number of frets: {self.num_frets}')
+        object.__setattr__(self, 'part_settings', dict(self.part_settings))
+        PartSettings(self.tuning, self.num_frets)       # validates the default instrument
         if self.output_mode not in OUTPUT_MODES:
             raise ValueError(f'invalid output mode: {self.output_mode!r}')
-        Fretboard(self.tuning, self.num_frets)          # validates the note names
+        for part_id, settings in self.part_settings.items():
+            if not isinstance(settings, PartSettings):
+                raise ValueError(f'part {part_id}: settings must be PartSettings')
 
     @property
     def num_strings(self) -> int:
         return len(self.tuning)
+
+    def settings_for(self, part_id: str) -> PartSettings:
+        """The instrument ``part_id`` is analyzed for."""
+        return self.part_settings.get(part_id) or PartSettings(self.tuning, self.num_frets)
 
 
 def analyze(config: AnalysisConfig) -> AnalysisResult:
@@ -84,12 +122,15 @@ def analyze(config: AnalysisConfig) -> AnalysisResult:
                 config.part_ids or 'auto', config.output_mode, config.labels)
     tree = load_score(config.filepath)
     targets = select_targets(list_parts(tree), config.part_ids, config.filepath.name)
-    fretboard = Fretboard(config.tuning, config.num_frets)
 
     reports = []
     for part in targets:
+        settings = config.settings_for(part.part_id)
+        if part.part_id in config.part_settings:
+            logger.info('Part %s: tuning %s, %d frets', part.part_id, ' '.join(settings.tuning),
+                        settings.num_frets)
         notes = read_part(part)
-        playability = analyze_notes(notes, fretboard)
+        playability = analyze_notes(notes, settings.fretboard())
         colorize(notes)
         if config.labels:
             annotate(part.element, playability.events, playability.unisons)
@@ -97,7 +138,8 @@ def analyze(config: AnalysisConfig) -> AnalysisResult:
             remove_annotations(part.element)
         report = PartReport(part_id=part.part_id, name=part.name, notes=notes,
                             events=playability.events, not_analyzed=playability.not_analyzed,
-                            unisons=playability.unisons)
+                            unisons=playability.unisons, tuning=settings.tuning,
+                            num_frets=settings.num_frets)
         logger.info('Part %s %r: %s', part.part_id, part.name, report.counts)
         reports.append(report)
 

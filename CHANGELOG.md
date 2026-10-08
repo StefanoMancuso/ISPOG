@@ -6,6 +6,50 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+The next release is **1.0.0b1**: desktop app, web version and MuseScore plugin with one
+instrument per part and the problem list (after 0.10.0, the stable release of 0.10.0b3).
+
+### Added
+- MuseScore Studio plugin (`musescore/`): the analysis inside MuseScore 4.6+, on request
+  (whole score or selected measures), with one instrument per part, problem list (a click
+  selects the notes), report and settings saved in the score. Its engine is a JavaScript
+  port of the core, checked against it at every push (job `musescore`: identical colors,
+  positions, fingers and reasons on the test scores and on 400 random passages). Every
+  release attaches it as `ISPOG-<version>-musescore.zip`; `scripts/release.py` keeps its
+  version equal to ISPOG's.
+- Web version: one row per part in a table (tick, tuning, frets; a preset fills the ticked
+  parts; the tuning written in the score is used when present) and the problem table, as
+  in the desktop app.
+- Each part has its own instrument: tuning and number of frets per part
+  (`core.processor.PartSettings`, `AnalysisConfig.part_settings`). In the desktop app every
+  part has one row: tick it, choose a preset (Standard, Drop D, Open G, *From score* when
+  the MusicXML writes the tuning in `<staff-tuning>`, Custom) or type the tuning, string 1
+  first, and set the frets; an invalid setting is shown on its row. Non-guitar parts can be
+  ticked and analyzed with the tuning given.
+- The report gives the tuning of every part when the parts are analyzed with different
+  instruments.
+- Problem list in the window after the analysis (`core.report.problem_points`): difficult,
+  unplayable and not-as-written points in score order, in their color, with the short
+  label; a click shows the reason, the notes, the held notes and the closest fingering.
+  The full report is in a second tab.
+- `PartInfo.tuning`: open strings read from `<staff-details>/<staff-tuning>`.
+
+### Changed
+- Desktop window: new look (`gui/theme.py`, the same as the MuseScore plugin), resizable
+  with a minimum size; the parts list scrolls beyond four parts.
+- The analysis no longer opens the save dialog: the results are shown in the window and
+  "Save colored score…" saves the score (or the parts) and the report, as before. No
+  summary message box: the summary is above the results. Changing a setting after the
+  analysis says that the results are out of date.
+- Hugging Face: a release moves the executables of the earlier releases to
+  `archive/<version>/` instead of deleting them, so that every published version stays
+  downloadable (`scripts/release.py upload-hf`); a beta still replaces the previous one.
+
+### Removed
+- The tuning panels shared by all parts: eight note spinboxes in the desktop app, preset,
+  strings and eight note menus in the web version. `NOTE_LIST`, `STANDARD_TUNING_INDICES`,
+  `DEFAULT_NUM_STRINGS` (config/settings.py).
+
 ## [0.10.0] - 2026-10-08
 
 Stable release of 0.10.0b3, unchanged: the version tested by its users.

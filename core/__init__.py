@@ -22,7 +22,7 @@ from .model import Note, PartInfo
 from .reader import load_score, to_partwise, list_parts, read_part
 
 # Analysis
-from .fretboard import Fretboard, note_name_to_midi
+from .fretboard import Fretboard, note_name_to_midi, parse_tuning
 from .analyzer import ChordAnalyzer
 from .playability import analyze_notes, ChordEvent, PlayabilityResult
 
@@ -32,9 +32,9 @@ from .writer import (colorize, set_notehead_color, annotate, remove_annotations,
 
 # Processor and reports
 from .model import PartReport, AnalysisResult
-from .processor import (AnalysisConfig, analyze, select_targets, preselected_part_ids,
-                        write_notes_logs)
-from .report import render_report, render_summary, render_notes_tsv
+from .processor import (AnalysisConfig, PartSettings, analyze, select_targets,
+                        preselected_part_ids, write_notes_logs)
+from .report import ProblemPoint, problem_points, render_report, render_summary, render_notes_tsv
 from .naming import output_names, report_name
 
 __all__ = [
@@ -53,6 +53,7 @@ __all__ = [
     # Analysis
     'Fretboard',
     'note_name_to_midi',
+    'parse_tuning',
     'ChordAnalyzer',
     'analyze_notes',
     'ChordEvent',
@@ -69,10 +70,13 @@ __all__ = [
     'PartReport',
     'AnalysisResult',
     'AnalysisConfig',
+    'PartSettings',
     'analyze',
     'select_targets',
     'preselected_part_ids',
     'write_notes_logs',
+    'ProblemPoint',
+    'problem_points',
     'render_report',
     'render_summary',
     'render_notes_tsv',

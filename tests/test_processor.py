@@ -10,7 +10,7 @@ from lxml import etree
 from conftest import BASELINE_DIR, TESTS_DIR, PartSpec, attributes, make_score, note
 from config.settings import COLOR_CODES
 from core.errors import NoGuitarPartError, UnsupportedFileError
-from core.processor import (AnalysisConfig, analyze, preselected_part_ids, select_targets,
+from core.processor import (AnalysisConfig, PartSettings, analyze, preselected_part_ids, select_targets,
                             write_notes_logs)
 from core.reader import list_parts, load_score
 from core.writer import CREDIT_ID, LABEL_ID_PREFIX
@@ -204,3 +204,38 @@ def test_microtones_are_listed_not_colored(write_score):
     report = analyze(_config(path)).reports[0]
     assert report.counts == {"green": 1, "orange": 0, "red": 0, "purple": 0, "black": 1}
     assert [n.reason for n in report.not_analyzed] == ["microtone not analyzed"]
+
+
+# ---------------------------------------------------------------------------
+# One instrument per part
+# ---------------------------------------------------------------------------
+
+def test_each_part_with_its_own_instrument(test_poli_path):
+    drop_d = PartSettings(("E4", "B3", "G3", "D3", "A2", "D2"), 12)
+    config = AnalysisConfig(test_poli_path, tuning=STANDARD, part_settings={"P4": drop_d})
+    assert config.settings_for("P4") == drop_d
+    assert config.settings_for("P3") == PartSettings(STANDARD, 19)
+    result = analyze(config)
+    by_id = {r.part_id: r for r in result.reports}
+    assert (by_id["P3"].tuning, by_id["P3"].num_frets) == (STANDARD, 19)
+    assert (by_id["P4"].tuning, by_id["P4"].num_frets) == (drop_d.tuning, 12)
+
+
+def test_part_settings_change_the_analysis(write_score):
+    # D2 is out of range in standard tuning, an open string in Drop D
+    path = write_score(make_score(measures=[attributes() + note("D", 2, 4)]))
+    standard = analyze(AnalysisConfig(path, tuning=STANDARD))
+    drop_d = analyze(AnalysisConfig(path, tuning=STANDARD, part_settings={
+        "P1": PartSettings(("E4", "B3", "G3", "D3", "A2", "D2"))}))
+    assert standard.reports[0].counts["red"] == 1
+    assert drop_d.reports[0].counts["green"] == 1
+
+
+@pytest.mark.parametrize("tuning, frets, message", [
+    (("E4", "B3", "G3"), 19, "invalid number of strings: 3"),
+    (STANDARD, 30, "invalid number of frets: 30"),
+    (("E4", "B3", "G3", "D3", "A2", "X2"), 19, "note name"),
+])
+def test_part_settings_are_validated(tuning, frets, message):
+    with pytest.raises(ValueError, match=message):
+        PartSettings(tuning, frets)

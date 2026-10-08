@@ -16,12 +16,20 @@ tkinter = pytest.importorskip("tkinter")
 
 from core.errors import NoGuitarPartError  # noqa: E402
 from gui import main_window, widgets  # noqa: E402
+from core import parse_tuning  # noqa: E402
 from gui.widgets import ProcessButton  # noqa: E402
+
+STANDARD = ("E4", "B3", "G3", "D3", "A2", "E2")
 
 
 # ---------------------------------------------------------------------------
 # Without a window
 # ---------------------------------------------------------------------------
+
+def test_parse_tuning():
+    assert parse_tuning(" E4 B3,G3;D3  A2 E2 ") == STANDARD
+    assert parse_tuning("") == ()
+
 
 def test_error_messages():
     assert ProcessButton._error_message(NoGuitarPartError("No guitar part")) == "No guitar part"
@@ -80,20 +88,28 @@ def _load(window, stubs, path):
 def _analyze(window, timeout=20.0):
     window.process_button._run_analysis()
     start = time.monotonic()
-    while str(window.process_button.run_button["state"]) == "disabled":
+    while window.process_button.is_busy():
         assert time.monotonic() - start < timeout, "analysis did not finish"
         window.update()
         time.sleep(0.02)
+    window.update()
+
+
+def _save(window):
+    window.results._save()
+    window.update()
 
 
 def test_loading_a_score_lists_its_parts(app, test_poli_path):
     window, stubs = app
     _load(window, stubs, test_poli_path)
-    selector = window.part_selector
-    assert selector.listbox.get(0, "end") == (
-        "Flauto (P1)", "Piano (P2)", "Chitarra classica 1 (P3)", "Chitarra classica 2 (P4)")
-    assert [p.part_id for p in selector.selected_parts()] == ["P3", "P4"]
-    assert selector.status_text.get() == "2 of 4 parts are guitars"
+    parts = window.parts
+    assert [str(r.check["text"]) for r in parts.rows] == [
+        "Flauto (P1)", "Piano (P2)", "Chitarra classica 1 (P3)", "Chitarra classica 2 (P4)"]
+    assert [p.part_id for p in parts.selected_parts()] == ["P3", "P4"]
+    assert parts.status_text.get() == "2 of 4 parts are guitars"
+    assert all(r.tuning.get() == "E4 B3 G3 D3 A2 E2" and r.frets.get() == "19"
+               for r in parts.rows)
 
 
 def test_files_opened_from_the_system_are_loaded(app, test01_path, test_poli_path):
@@ -113,28 +129,121 @@ def test_unreadable_file_is_refused_at_loading(app, tmp_path, test_poli_path):
     _load(window, stubs, bad)
     assert stubs.messages[-1][0] == "ask" and "bad.xml" in stubs.messages[-1][1]
     assert window.file_selector.get_filepath() is None
-    assert window.part_selector.listbox.size() == 0
+    assert window.parts.rows == []
+
+
+def test_presets_and_custom_tuning(app, test01_path):
+    window, stubs = app
+    _load(window, stubs, test01_path)
+    row = window.parts.rows[0]
+    row.preset.set("Drop D")
+    row._on_preset()
+    assert row.tuning.get() == "E4 B3 G3 D3 A2 D2"
+    row.tuning.set("E4 B3 G3 D3 A2 E2")                       # typed: the preset follows
+    assert row.preset.get() == "Standard"
+    row.tuning.set("E4 B3 G3 D3 A2 C2")
+    assert row.preset.get() == "Custom" and row.error.get() == ""
+    row.tuning.set("E4 B3 X3")
+    assert row.error.get().startswith("invalid")
+    row.analyze.set(False)
+    row._on_toggle()                                          # an unticked part is not checked
+    assert row.error.get() == "" and str(row.tuning_entry["state"]) == "disabled"
+
+
+def test_tuning_written_in_the_score_is_offered(app, write_score):
+    from conftest import attributes, make_score, note
+    window, stubs = app
+    details = ("<staff-details><staff-lines>6</staff-lines>" + "".join(
+        f'<staff-tuning line="{line}"><tuning-step>{step}</tuning-step>'
+        f"<tuning-octave>{octave}</tuning-octave></staff-tuning>"
+        for line, (step, octave) in enumerate(
+            [("D", 2), ("A", 2), ("D", 3), ("G", 3), ("B", 3), ("E", 4)], start=1))
+        + "</staff-details>")
+    xml = make_score(measures=[attributes().replace("</attributes>", details + "</attributes>")
+                               + note("D", 2, 4)])
+    _load(window, stubs, write_score(xml))
+    row = window.parts.rows[0]
+    assert row.preset.get() == "From score" and row.tuning.get() == "E4 B3 G3 D3 A2 D2"
+
+
+def test_analysis_shows_the_problems(app, tmp_path):
+    from conftest import FIXTURES_DIR
+    from core import AnalysisConfig, analyze, problem_points
+    window, stubs = app
+    path = FIXTURES_DIR / "test_ISPOG.mxl"
+    _load(window, stubs, path)
+    _analyze(window)
+    expected = problem_points(analyze(AnalysisConfig(path, tuning=STANDARD)).reports[0])
+    results = window.results
+    assert [p.title for p in results.points] == [p.title for p in expected]
+    assert len(results.tree.get_children()) == len(expected)
+    assert results.notebook.tab(0, "text") == f"Problems ({len(expected)})"
+    assert "Chitarra classica: 57 notes" in results.summary_text.get()
+    results.select(1)
+    details = results.details.get("1.0", "end")
+    assert expected[1].title in details and expected[1].reason in details
+    assert "Playability report" in results.report.get("1.0", "end")
+    assert stubs.messages == []                               # nothing saved, no dialog
 
 
 def test_full_score(app, tmp_path, test_poli_path):
     window, stubs = app
     stubs.logs = tmp_path / "logs"
     _load(window, stubs, test_poli_path)
-    stubs.save.append(tmp_path / "out_ispog.musicxml")
     _analyze(window)
+    assert str(window.results.save_button["state"]) == "normal"
+    stubs.save.append(tmp_path / "out_ispog.musicxml")
+    _save(window)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "logs", "out_ispog.musicxml", "out_ispog_report.txt"]
+    assert window.results.saved_text.get() == "Saved: out_ispog.musicxml, out_ispog_report.txt"
+    assert stubs.messages == []
+
+
+def test_each_part_with_its_instrument(app, tmp_path, test_poli_path):
+    window, stubs = app
+    stubs.logs = tmp_path / "logs"
+    _load(window, stubs, test_poli_path)
+    window.parts.row("P4").set_settings(("E4", "B3", "G3", "D3", "A2", "D2"), 12)
+    _analyze(window)
+    config = window.process_button.last_config
+    assert config.settings_for("P3").tuning == STANDARD
+    assert config.settings_for("P4").tuning[-1] == "D2"
+    assert config.settings_for("P4").num_frets == 12
+    report = window.results.report.get("1.0", "end")
+    assert "Tuning:  per part" in report
+    assert "Tuning:  E4 B3 G3 D3 A2 D2 · 12 frets" in report
+
+
+def test_settings_changed_after_the_analysis(app, test_poli_path):
+    window, stubs = app
+    _load(window, stubs, test_poli_path)
+    _analyze(window)
+    assert not window.results.stale
+    window.parts.row("P3").frets.set("12")
+    assert window.results.stale
+    _analyze(window)
+    assert not window.results.stale
+
+
+def test_invalid_settings_are_named(app, test_poli_path):
+    window, stubs = app
+    _load(window, stubs, test_poli_path)
+    window.parts.row("P4").tuning.set("E4 B3 G3")
+    window.process_button._run_analysis()
     kind, message = stubs.messages[-1]
-    assert kind == "info" and message.startswith("Chitarra classica 1: 28 notes")
+    assert kind == "warning" and message.startswith("Chitarra classica 2: invalid number of strings")
+    assert window.process_button.last_result is None
 
 
 def test_separate_parts_and_overwrite(app, tmp_path, test_poli_path):
     window, stubs = app
     stubs.logs = tmp_path / "logs"
     _load(window, stubs, test_poli_path)
-    window.part_selector.output_mode.set("split")
-    stubs.folder.append(tmp_path)
+    window.options.output_mode.set("split")
     _analyze(window)
+    stubs.folder.append(tmp_path)
+    _save(window)
     expected = ["test_poli_Chitarra_classica_1_ispog.musicxml",
                 "test_poli_Chitarra_classica_2_ispog.musicxml", "test_poli_ispog_report.txt"]
     assert sorted(p.name for p in tmp_path.glob("test_poli*")) == expected
@@ -142,7 +251,7 @@ def test_separate_parts_and_overwrite(app, tmp_path, test_poli_path):
 
     stubs.answer_yes = False
     stubs.folder.append(tmp_path)
-    _analyze(window)
+    _save(window)
     assert stubs.messages[-1][0] == "ask"
     assert {p: p.stat().st_mtime_ns for p in tmp_path.glob("test_poli*")} == before
 
@@ -153,10 +262,11 @@ def test_options_reach_the_analysis(app, tmp_path, write_score):
     stubs.logs = tmp_path / "logs"
     path = write_score(make_score(measures=[attributes() + note("E", 6, 4)]))
     _load(window, stubs, path)
-    window.part_selector.labels.set(False)
-    window.tuning_widget.num_frets.set(24)
-    stubs.save.append(tmp_path / "out.musicxml")
+    window.options.labels.set(False)
+    window.parts.rows[0].frets.set("24")
     _analyze(window)
+    stubs.save.append(tmp_path / "out.musicxml")
+    _save(window)
     report = (tmp_path / "out_report.txt").read_text(encoding="utf-8")
     assert "· 24 frets" in report and "No difficult or unplayable passages." in report
     assert b"ispog-label" not in (tmp_path / "out.musicxml").read_bytes()
@@ -165,7 +275,8 @@ def test_options_reach_the_analysis(app, tmp_path, write_score):
 def test_nothing_selected(app, test_poli_path):
     window, stubs = app
     _load(window, stubs, test_poli_path)
-    window.part_selector.listbox.selection_clear(0, "end")
+    for row in window.parts.rows:
+        row.analyze.set(False)
     window.process_button._run_analysis()
     assert stubs.messages[-1] == ("warning", "Select at least one part to analyze")
 
@@ -174,37 +285,42 @@ def test_cancelled_save_writes_nothing(app, tmp_path, test01_path):
     window, stubs = app
     stubs.logs = tmp_path / "logs"
     _load(window, stubs, test01_path)
-    _analyze(window)                                    # no answer queued: dialog cancelled
+    _analyze(window)
+    _save(window)                                       # no answer queued: dialog cancelled
     assert list(tmp_path.iterdir()) == []
-    assert stubs.messages == []
+    assert stubs.messages == [] and window.results.saved_text.get() == "Not saved yet"
 
 
-def _size(window):
-    window.update()
-    return window.winfo_width(), window.winfo_height()
+def test_a_new_score_clears_the_results(app, test01_path, test_poli_path):
+    window, stubs = app
+    _load(window, stubs, test01_path)
+    _analyze(window)
+    _load(window, stubs, test_poli_path)
+    assert window.results.points == [] and str(window.results.save_button["state"]) == "disabled"
 
 
-def test_window_fits_its_content_and_never_grows(app, tmp_path, test_poli_path):
+def test_window_is_resizable_with_a_minimum(app, tmp_path, test_poli_path):
+    from config.settings import WINDOW_MIN_SIZE
     window, stubs = app
     window.deiconify()
-    assert window.resizable() == (False, False)
-    size = _size(window)
-    assert size == (window.body.winfo_reqwidth(), window.body.winfo_reqheight())
-
-    _load(window, stubs, test_poli_path)                      # parts listed
-    window.tuning_widget.tuning_mode.set("custom")            # all tuning controls enabled
-    window.tuning_widget._on_tuning_change()
-    assert _size(window) == size
-    window.process_button._set_busy(True)                     # progress bar instead of button
-    assert _size(window) == size
-    window.process_button._set_busy(False)
-
+    window.update()
+    assert window.resizable() == (True, True)
+    assert window.minsize() == WINDOW_MIN_SIZE
     long_name = tmp_path / ("a very long score name for a guitar quartet " * 3 + ".musicxml")
     long_name.write_bytes(test_poli_path.read_bytes())
     _load(window, stubs, long_name)
     assert window.file_selector.status_text.get().count("…") == 1
-    assert _size(window) == size
-    assert window.body.winfo_reqwidth() <= size[0]
+
+
+def test_many_parts_scroll(app, write_score):
+    from conftest import PartSpec, attributes, make_score, note
+    window, stubs = app
+    parts = [PartSpec(measures=[attributes() + note("E", 3, 4)], part_id=f"P{i}",
+                      name=f"Guitar {i}") for i in range(1, 9)]
+    _load(window, stubs, write_score(make_score(parts=parts)))
+    window.update()
+    assert len(window.parts.rows) == 8
+    assert window.parts.scrollbar.winfo_manager() == "grid"            # shown
 
 
 def test_dropped_paths(app):
@@ -268,8 +384,9 @@ def test_report_after_analysis_sends_what_the_tester_chose(app, reports, tmp_pat
     sent, _ = reports
     stubs.logs = tmp_path / "logs"
     _load(window, stubs, test01_path)
-    stubs.save.append(tmp_path / "out.musicxml")
     _analyze(window)
+    stubs.save.append(tmp_path / "out.musicxml")
+    _save(window)
 
     dialog = window.open_report()
     dialog._sender = sent.append
@@ -331,7 +448,6 @@ def test_analysis_of_another_score_is_not_offered(app, reports, tmp_path, test01
     window, stubs = app
     stubs.logs = tmp_path / "logs"
     _load(window, stubs, test01_path)
-    stubs.save.append(tmp_path / "out.musicxml")
     _analyze(window)
     _load(window, stubs, test_poli_path)                          # a different score now
     dialog = window.open_report()

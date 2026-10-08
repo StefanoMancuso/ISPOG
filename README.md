@@ -19,9 +19,16 @@ Each note gets a string, a fret and a finger of the fretting hand; held notes ke
 How far two fingers can stretch, per pair of fingers and strings, is set in
 `config/finger_stretch.csv` and can be edited in a spreadsheet (format in `core/stretch.py`).
 
-Current release: **0.9.1** (alpha). Version 0.10 (in development) moves to a real XML
-parser, analyzes multi-part scores and adds a readable report. See the
-[CHANGELOG](CHANGELOG.md).
+Every part can be analyzed with its own instrument (tuning and number of frets); after the
+analysis the problem list shows each difficult or unplayable point with its reason and the
+closest fingering found.
+
+Three ways to use it, on the same analysis: the desktop app, the web version, and a plugin
+for MuseScore Studio (`musescore/`, see [its README](musescore/README.md)).
+
+Current release: **0.9.1** (alpha). Version 1.0 (beta in development) moves to a real XML
+parser, analyzes multi-part scores with one instrument per part, adds the problem list, a
+readable report and the MuseScore plugin. See the [CHANGELOG](CHANGELOG.md).
 
 ## Download
 
@@ -33,6 +40,7 @@ parser, analyzes multi-part scores and adds a readable report. See the
 | Windows 10/11 | `ISPOG-<version>-windows.exe` |
 | macOS, Apple Silicon (M1 and later) | `ISPOG-<version>-macos-arm64.zip` |
 | macOS, Intel | `ISPOG-<version>-macos-x86_64.zip` |
+| MuseScore Studio 4.6+ plugin | `ISPOG-<version>-musescore.zip` (unzip into `Documents/MuseScore4/Plugins`) |
 
 Beta versions are in the `beta` folder. No installation and no Python needed: on Windows
 run the `.exe`; on macOS unzip and move `ISPOG.app` to Applications.

@@ -1,5 +1,6 @@
 # Release: push a tag v<version> (e.g. v0.10.0b1) on the release commit (plan, F7).
 # check → tests → build (Windows, macOS arm64, macOS Intel, each self-tested)
+#       + MuseScore plugin zip (musescore/ISPOG)
 #       → GitHub release, Hugging Face upload, web deploy on Render.
 # Dry run: Actions → release → "Run workflow": tests and builds the executables of the
 # current commit (downloadable from the run page for 7 days) and publishes nothing.
@@ -104,9 +105,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  musescore:                         # the MuseScore plugin, as ISPOG-<version>-musescore.zip
+    needs: [check, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version of the plugin
+        run: |
+          grep -qx '    version: "${{ needs.check.outputs.version }}"' musescore/ISPOG/ispog.qml
+          grep -qx 'var ENGINE_VERSION = "${{ needs.check.outputs.version }}";' musescore/ISPOG/ispog_engine.js
+      - name: Package
+        run: |
+          mkdir -p package
+          cp -r musescore/ISPOG package/ISPOG
+          cp musescore/README.md package/ISPOG/README.md
+          cp LICENSE package/ISPOG/LICENSE
+          cd package && zip -r "../ISPOG-${{ needs.check.outputs.version }}-musescore.zip" ISPOG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ISPOG-${{ needs.check.outputs.version }}-musescore
+          path: ISPOG-${{ needs.check.outputs.version }}-musescore.zip
+          if-no-files-found: error
+          retention-days: 7
+
   github-release:
     if: github.event_name == 'push'
-    needs: [check, build]
+    needs: [check, build, musescore]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,7 +152,7 @@ jobs:
 
   huggingface:                       # public download page
     if: github.event_name == 'push'
-    needs: [check, build]
+    needs: [check, build, musescore]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -147,7 +171,7 @@ jobs:
 
   deploy-web:                        # Render: auto-deploy is off, the web follows the releases
     if: github.event_name == 'push'
-    needs: [check, build]
+    needs: [check, build, musescore]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy the tagged commit

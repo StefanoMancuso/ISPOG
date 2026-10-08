@@ -430,3 +430,23 @@ def test_errors_are_user_facing(write_score):
         load_score(write_score(b"just text", "My Score.musicxml"))
     assert "'My Score.musicxml'" in str(info.value)
     assert isinstance(info.value.__cause__, etree.XMLSyntaxError)
+
+
+def _tuned_part(lines) -> str:
+    details = "<staff-details><staff-lines>6</staff-lines>" + "".join(
+        f'<staff-tuning line="{line}"><tuning-step>{step}</tuning-step>'
+        + (f"<tuning-alter>{alter}</tuning-alter>" if alter else "")
+        + f"<tuning-octave>{octave}</tuning-octave></staff-tuning>"
+        for line, (step, alter, octave) in lines) + "</staff-details>"
+    return attributes().replace("</attributes>", details + "</attributes>") + note("E", 4, 4)
+
+
+def test_tuning_written_in_the_score(write_score):
+    lines = enumerate([("D", 0, 2), ("A", 0, 2), ("D", 0, 3), ("F", 1, 3), ("B", -1, 3),
+                       ("E", 0, 4)], start=1)
+    part = list_parts(load_score(write_score(make_score(measures=[_tuned_part(lines)]))))[0]
+    assert part.tuning == ("E4", "Bb3", "F#3", "D3", "A2", "D2")
+
+
+def test_no_tuning_written(test01_path):
+    assert list_parts(load_score(test01_path))[0].tuning is None

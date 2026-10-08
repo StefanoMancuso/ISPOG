@@ -5,8 +5,8 @@ GUI package for ISPOG.
 Widgets are imported on first use: importing the package does not need Tkinter.
 """
 
-__all__ = ['MainWindow', 'FileSelectorWidget', 'TuningWidget', 'PartSelectorWidget',
-           'ProcessButton']
+__all__ = ['MainWindow', 'FileSelectorWidget', 'PartsWidget', 'OptionsWidget', 'ProcessButton',
+           'ResultsPanel']
 
 
 def __getattr__(name: str):
