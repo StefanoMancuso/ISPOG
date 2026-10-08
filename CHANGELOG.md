@@ -8,6 +8,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [0.10.0] - 2026-10-08
 
+Stable release of 0.10.0b3, unchanged: the version tested by its users.
+
 ## [0.10.0b3] - 2026-10-07
 
 ### Added
