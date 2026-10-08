@@ -26,9 +26,8 @@ closest fingering found.
 Three ways to use it, on the same analysis: the desktop app, the web version, and a plugin
 for MuseScore Studio (`musescore/`, see [its README](musescore/README.md)).
 
-Current release: **0.9.1** (alpha). Version 1.0 (beta in development) moves to a real XML
-parser, analyzes multi-part scores with one instrument per part, adds the problem list, a
-readable report and the MuseScore plugin. See the [CHANGELOG](CHANGELOG.md).
+Stable release: **0.10.0**. Beta: **1.0**, with one instrument per part, the problem list
+and the MuseScore plugin. What changed in each version: [CHANGELOG](CHANGELOG.md).
 
 ## Download
 
@@ -40,10 +39,11 @@ readable report and the MuseScore plugin. See the [CHANGELOG](CHANGELOG.md).
 | Windows 10/11 | `ISPOG-<version>-windows.exe` |
 | macOS, Apple Silicon (M1 and later) | `ISPOG-<version>-macos-arm64.zip` |
 | macOS, Intel | `ISPOG-<version>-macos-x86_64.zip` |
-| MuseScore Studio 4.6+ plugin | `ISPOG-<version>-musescore.zip` (unzip into `Documents/MuseScore4/Plugins`) |
+| MuseScore Studio 4.6+ plugin (from 1.0) | `ISPOG-<version>-musescore.zip` (unzip into `Documents/MuseScore4/Plugins`) |
 
-Beta versions are in the `beta` folder. No installation and no Python needed: on Windows
-run the `.exe`; on macOS unzip and move `ISPOG.app` to Applications.
+On Hugging Face the main folder holds the latest stable release, `beta/` the latest beta
+and `archive/<version>/` the earlier releases. No installation and no Python needed: on
+Windows run the `.exe`; on macOS unzip and move `ISPOG.app` to Applications.
 
 ### First launch
 
@@ -57,8 +57,8 @@ the first time:
 ### Security scan warning on Hugging Face
 
 Hugging Face may mark the macOS `.zip` files as "unsafe" (scanner: Protect AI). This is a
-false positive (under review with Hugging Face): PyInstaller bundles pack the Python libraries, including `pickle`-related
-modules, and the scanner flags them inside the archive. The files are built from this
+false positive (under review with Hugging Face): PyInstaller bundles pack the Python
+libraries, including `pickle`-related modules, and the scanner flags them inside the archive. The files are built from this
 repository by the release workflow (`.github/workflows/release.yml`), and each executable
 passes `ISPOG --self-test` before publishing. To verify a download, compare its SHA-256
 with the one shown on the file's page on Hugging Face.
@@ -103,7 +103,8 @@ pytest
 ```
 
 GitHub runs the same checks at every push to `main`. Web tests (`tests/test_web.py`) run only
-where Gradio is installed: `pytest -m web`.
+where Gradio is installed: `pytest -m web`. The MuseScore plugin has its own tests (same
+results as the Python core), also run by GitHub: see [musescore/README.md](musescore/README.md#tests).
 
 Real scores from many editors go in `tests/corpus/` (not versioned: they may be
 copyrighted). `pytest -m corpus -v` checks them; `python tests/tools/corpus_run.py` writes
@@ -111,22 +112,25 @@ the analyzed scores and reports to `tests/corpus/_output/` for a visual check.
 
 ## Versioning
 
-[PEP 440](https://peps.python.org/pep-0440/): `0.10.0b1` is the first beta of 0.10.0.
-The version lives in one place, `config/version.py`; between releases it carries a
-`.devN` suffix. Every analyzed score records the ISPOG version that produced it.
+[PEP 440](https://peps.python.org/pep-0440/): `1.0.0b1` is the first beta of 1.0.0.
+The version lives in `config/version.py` (`scripts/release.py` copies it into the MuseScore
+plugin); between releases it carries a `.devN` suffix. Every analyzed score records the
+ISPOG version that produced it.
 
 ### Releasing
 
 ```bash
-python scripts/release.py prepare 0.10.0b1     # version, CHANGELOG and CITATION for the release
-ruff check . && pytest                         # commit "Release 0.10.0b1", push
-git tag -a v0.10.0b1 -m "Beta 1" && git push origin v0.10.0b1
-python scripts/release.py start-dev 0.10.0b2   # commit "Start 0.10.0b2 development"
+python scripts/release.py prepare 1.0.0b2      # version, CHANGELOG and CITATION for the release
+ruff check . && pytest                         # commit "Release 1.0.0b2", push
+git tag -a v1.0.0b2 -m "ISPOG 1.0.0b2" && git push origin v1.0.0b2
+python scripts/release.py start-dev 1.0.0b3    # commit "Start 1.0.0b3 development"
 ```
 
 The tag starts `.github/workflows/release.yml`: tests, executables for Windows and macOS
-(each checked with `ISPOG --self-test` before publishing), GitHub release, upload to
-Hugging Face, deploy of the web version. Secrets: `HF_TOKEN`, `RENDER_DEPLOY_HOOK`.
+(each checked with `ISPOG --self-test` before publishing), the MuseScore plugin zip, GitHub
+release, upload to Hugging Face, deploy of the web version. On Hugging Face a beta replaces
+the previous one in `beta/`; a stable release replaces the one in the main folder and moves
+it to `archive/<version>/`. Secrets: `HF_TOKEN`, `RENDER_DEPLOY_HOOK`.
 To build locally: `pip install -e ".[build]"`, then `pyinstaller --noconfirm ISPOG.spec`.
 
 ## Related publications
