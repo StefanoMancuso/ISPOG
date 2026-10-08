@@ -6,8 +6,10 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
-The next release is **1.0.0b1**: desktop app, web version and MuseScore plugin with one
-instrument per part and the problem list (after 0.10.0, the stable release of 0.10.0b3).
+## [1.0.0b1] - 2026-10-08
+
+First beta of 1.0: desktop app, web version and MuseScore plugin, with one instrument per
+part and the problem list.
 
 ### Added
 - MuseScore Studio plugin (`musescore/`): the analysis inside MuseScore 4.6+, on request
@@ -227,7 +229,8 @@ version at <https://ispog.onrender.com>.
   orange (difficult), red (unplayable).
 - Tunings: Standard, Drop D, Open G and custom; 4–8 strings; configurable number of frets.
 
-[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v1.0.0b1...HEAD
+[1.0.0b1]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0...v1.0.0b1
 [0.10.0]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b3...v0.10.0
 [0.10.0b3]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b2...v0.10.0b3
 [0.10.0b2]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b1...v0.10.0b2

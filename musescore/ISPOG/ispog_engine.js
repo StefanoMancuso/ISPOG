@@ -18,7 +18,7 @@
 // QML freezes the built-in prototypes: never name a property after a built-in one
 // (apply, call, toString...), the assignment would be silently ignored.
 
-var ENGINE_VERSION = "1.0.0b1.dev0";
+var ENGINE_VERSION = "1.0.0b1";
 
 // ============================================================================
 // Settings (config/settings.py)
