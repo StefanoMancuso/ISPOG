@@ -6,6 +6,8 @@ Versioning: [PEP 440](https://peps.python.org/pep-0440/) (`0.10.0b1` = first bet
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-08
+
 ## [0.10.0b3] - 2026-10-07
 
 ### Added
@@ -179,7 +181,8 @@ version at <https://ispog.onrender.com>.
   orange (difficult), red (unplayable).
 - Tunings: Standard, Drop D, Open G and custom; 4–8 strings; configurable number of frets.
 
-[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b3...HEAD
+[Unreleased]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b3...v0.10.0
 [0.10.0b3]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b2...v0.10.0b3
 [0.10.0b2]: https://github.com/StefanoMancuso/ISPOG/compare/v0.10.0b1...v0.10.0b2
 [0.10.0b1]: https://github.com/StefanoMancuso/ISPOG/compare/v0.9.1...v0.10.0b1
