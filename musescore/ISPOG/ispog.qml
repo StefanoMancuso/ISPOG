@@ -23,7 +23,7 @@ import "ispog_engine.js" as Engine
 MuseScore {
     id: root
 
-    version: "1.0.0b1"
+    version: "1.0.0b2.dev0"
     title: "ISPOG"
     description: "Is it Playable on Guitar? Colors the notes of the guitar parts by playability."
     categoryCode: "color-notes"
