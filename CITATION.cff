@@ -9,8 +9,8 @@ abstract: >-
 authors:
   - family-names: Mancuso
     given-names: Stefano
-version: 1.0.0b1
-date-released: 2026-10-08
+version: 1.0.0
+date-released: 2026-10-23
 license: GPL-3.0-or-later
 url: "https://ispog.onrender.com"
 repository-code: "https://github.com/StefanoMancuso/ISPOG"

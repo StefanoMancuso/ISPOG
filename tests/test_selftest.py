@@ -37,14 +37,19 @@ def test_embedded_scores_are_valid_musicxml(xml, musicxml_schema):
 
 @needs_display
 def test_self_test_passes(tmp_path):
+    # Fresh interpreter: tkdnd loads in the first Tk of a process, as in the executable.
+    # In-process, earlier window tests (test_gui) have already created one.
     report = tmp_path / "report.json"
-    assert selftest.run_self_test(report, require_drop=True) == 0
+    code = ("import sys; from pathlib import Path; from gui.selftest import run_self_test; "
+            "sys.exit(run_self_test(Path(sys.argv[1]), require_drop=True))")
+    result = subprocess.run([sys.executable, "-c", code, str(report)], cwd=PROJECT_ROOT,
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
     data = json.loads(report.read_text(encoding="utf-8"))
     assert data["passed"] is True
     assert set(data["checks"]) == {"analysis", "compressed", "timewise", "log_folder",
                                    "certificates", "window"}
     assert "drag and drop on" in data["checks"]["window"]["detail"]
-
 
 @needs_display
 def test_a_failed_check_is_reported(tmp_path, monkeypatch):

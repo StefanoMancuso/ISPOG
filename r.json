@@ -1,0 +1,32 @@
+{
+  "ispog": "1.0.0",
+  "frozen": false,
+  "platform": "win32",
+  "passed": true,
+  "checks": {
+    "analysis": {
+      "ok": true,
+      "detail": "{'green': 1, 'red': 7}"
+    },
+    "compressed": {
+      "ok": true,
+      "detail": "1 part"
+    },
+    "timewise": {
+      "ok": true,
+      "detail": "converted with resources/timepart.xsl"
+    },
+    "log_folder": {
+      "ok": true,
+      "detail": "D:\\Documenti\\python\\ISPOG\\software\\logs"
+    },
+    "certificates": {
+      "ok": true,
+      "detail": "121 CA certificates"
+    },
+    "window": {
+      "ok": true,
+      "detail": "Tk 8.6.15, drag and drop on"
+    }
+  }
+}

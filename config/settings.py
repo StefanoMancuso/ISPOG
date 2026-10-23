@@ -246,7 +246,7 @@ WEB_DEFAULT_PORT = 7860             # local runs; on Render the PORT variable de
 WEB_MAX_FILE_SIZE = '10mb'          # uploads above this size are refused by Gradio
 WEB_FILE_MAX_AGE = 3600             # seconds: uploads and results are deleted after this
 WEB_QUEUE_SIZE = 16                 # analyses waiting; further requests are turned away
-WEB_SHOW_REPOSITORY = False         # link to the sources in the footer (public repository)
+WEB_SHOW_REPOSITORY = True         # link to the sources in the footer (public repository)
 
 WEB_TEXT = {
     'title': 'ISPOG — Is it Playable on Guitar?',
