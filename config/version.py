@@ -11,4 +11,4 @@ Between releases the version carries a ``.devN`` suffix; the release commit remo
 and updates CHANGELOG.md and CITATION.cff (checked by tests/test_meta.py).
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1.dev0"
